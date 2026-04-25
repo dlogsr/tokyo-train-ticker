@@ -33,12 +33,23 @@ FPS       = 8
 # ── Layout constants ──────────────────────────────────────────────────────────
 HDR_H    = 22          # header height
 HERO_TOP = HDR_H       # hero card top y
-HERO_BOT = HERO_TOP + 95   # hero card bottom y (117)
-FOOTER_H = 24          # footer height
-FOOTER_Y = SCREEN_H - FOOTER_H   # footer top y (216)
-STRIP_H  = 18          # platform strip height
+HERO_BOT = HERO_TOP + 88   # hero card bottom y (110)
+FOOTER_H = 32          # footer height
+FOOTER_Y = SCREEN_H - FOOTER_H   # footer top y (208)
+STRIP_H  = 24          # platform strip height
 COL_H    = 15          # column header height
 ROW_H    = 20          # train list row height
+
+# ── Car formation data ────────────────────────────────────────────────────────
+CARS = {
+    "JY": 11, "JC": 10, "JB": 10, "JK": 15, "JA": 10,
+    "JH": 15, "JU": 15, "JE": 15, "JO": 15,
+    "G":  6,  "M":  10, "H":  8,  "T":  10, "C":  10,
+    "Y":  8,  "Z":  8,  "N":  6,  "F":  8,  "A":  8,
+    "I":  6,  "S":  8,  "E":  6,  "TY": 8,  "DT": 10,
+    "OM": 4,  "MG": 5,  "KO": 10, "OH": 10, "SI": 8,
+    "TJ": 8,  "KS": 8,
+}
 
 # ── Colors (RGB tuples) ───────────────────────────────────────────────────────
 BLACK   = (0,   0,   0)
@@ -119,6 +130,47 @@ def get_font(key):
         fonts[key] = _load_font(sizes.get(key, 12))
     return fonts[key]
 
+# ── CJK font support ──────────────────────────────────────────────────────────
+CJK_FONT_PATHS = [
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Light.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Light.ttc",
+    "/usr/share/fonts/truetype/vlgothic/VL-Gothic-Regular.ttf",
+    "/usr/share/fonts/truetype/vlgothic/VL-PGothic-Regular.ttf",
+    "/usr/share/fonts/truetype/ipafont-gothic/ipag.ttf",
+    "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
+]
+
+_cjk_fonts = {}
+def get_cjk_font(size):
+    if size not in _cjk_fonts:
+        for p in CJK_FONT_PATHS:
+            if os.path.exists(p):
+                try:
+                    _cjk_fonts[size] = ImageFont.truetype(p, size)
+                    break
+                except Exception:
+                    continue
+        if size not in _cjk_fonts:
+            _cjk_fonts[size] = get_font("xs")
+    return _cjk_fonts[size]
+
+def _ensure_cjk_font():
+    if any(os.path.exists(p) for p in CJK_FONT_PATHS):
+        return
+    import subprocess
+    for pkg in ("fonts-noto-cjk", "fonts-vlgothic", "fonts-ipafont-gothic"):
+        try:
+            print(f"CJK fonts not found — installing {pkg}...")
+            subprocess.run(["apt-get", "install", "-y", "-q", pkg],
+                           check=True, timeout=180)
+            print(f"Installed {pkg}")
+            return
+        except Exception as e:
+            print(f"Could not install {pkg}: {e}")
+    print("Run manually: sudo apt install -y fonts-vlgothic")
+
 # ── State ─────────────────────────────────────────────────────────────────────
 state = {
     "mode":           "station",
@@ -138,6 +190,7 @@ state = {
     "picker_type":    None,
     "picker_results": [],
     "picker_scroll":  0,
+    "list_scroll":    0,   # upcoming train list scroll offset
 }
 
 # ── Data fetching ─────────────────────────────────────────────────────────────
@@ -224,18 +277,19 @@ def dot_grid_overlay(img):
 def draw_header(draw):
     draw.rectangle([0, 0, SCREEN_W, HDR_H], fill=(8, 8, 8))
     draw.line([0, HDR_H, SCREEN_W, HDR_H], fill=BORDER)
-    f_ja = get_font("xs")
+    f_ja = get_cjk_font(13)
     f_en = get_font("sm")
+    f_clk = get_font("xs")
     ja = state["station_ja"]
     en = state["station_en"]
-    draw.text((4, 5), ja, font=f_ja, fill=(80, 80, 80))
+    draw.text((4, 4), ja, font=f_ja, fill=(160, 130, 60))
     x = 4 + text_w(draw, ja, f_ja) + 5
-    draw_text(draw, x, 4, en, f_en, WHITE, max_w=185)
+    draw_text(draw, x, 4, en, f_en, WHITE, max_w=180)
     from datetime import datetime, timezone, timedelta
     JST = timezone(timedelta(hours=9))
     clk = datetime.now(JST).strftime("%H:%M:%S")
-    cw = text_w(draw, clk, f_ja)
-    draw.text((SCREEN_W - cw - 4, 6), clk, font=f_ja, fill=(70, 70, 70))
+    cw = text_w(draw, clk, f_clk)
+    draw.text((SCREEN_W - cw - 4, 6), clk, font=f_clk, fill=(70, 70, 70))
 
 def draw_hero_card(draw):
     trains  = state["station_trains"]
@@ -254,9 +308,9 @@ def draw_hero_card(draw):
     bright  = brighten(color)
     shape   = train.get("shape", "rect")
 
-    badge_size = 70
+    badge_size = 68
     bx = (100 - badge_size) // 2
-    by = HERO_TOP + (95 - badge_size) // 2
+    by = HERO_TOP + (88 - badge_size) // 2
     code   = train["line_code"]
     rgb_bg = color
     rgb_fg = hex_to_rgb(train.get("text_color", "#000000"))
@@ -275,10 +329,28 @@ def draw_hero_card(draw):
     rx = 104
     line_obj  = next((l for l in state["all_lines"] if l["code"] == code), {})
     line_name = line_obj.get("name", code)
-    draw.text((rx, HERO_TOP + 4), line_name.upper(), font=get_font("xs"), fill=DIM)
+
+    # Car formation diagram — right side of line-name row
+    n_cars = CARS.get(code, 8)
+    car_avail = SCREEN_W - 4 - 218   # x=218 to x=316 = 98px
+    car_w = min(14, max(5, (car_avail - (n_cars - 1) * 2) // n_cars))
+    car_h = 9
+    car_gap = 2
+    total_car_w = n_cars * (car_w + car_gap) - car_gap
+    car_x = 218 + max(0, (car_avail - total_car_w) // 2)
+    car_y = HERO_TOP + 4
+    for ci in range(n_cars):
+        cx = car_x + ci * (car_w + car_gap)
+        fill = color if ci < n_cars - 1 else brighten(color, f=0.8, add=0)
+        draw.rectangle([cx, car_y, cx + car_w, car_y + car_h], fill=fill)
+    f_xs = get_font("xs")
+    nc_label = f"{n_cars}c"
+    draw.text((car_x + total_car_w + 3, car_y), nc_label, font=f_xs, fill=(50, 50, 50))
+
+    draw_text(draw, rx, HERO_TOP + 4, line_name.upper(), f_xs, DIM, max_w=110)
 
     dest = ("→ " + train.get("destination", "")).upper()
-    draw_text(draw, rx, HERO_TOP + 18, dest, get_font("md"), bright, max_w=210)
+    draw_text(draw, rx, HERO_TOP + 16, dest, get_font("md"), bright, max_w=210)
 
     eta = train.get("eta_min", 0)
     if eta <= 1:
@@ -290,14 +362,14 @@ def draw_hero_card(draw):
     else:
         eta_str, eta_color = f"{eta} MIN", GREEN
 
-    draw.text((rx, HERO_TOP + 38), eta_str, font=get_font("hero"), fill=eta_color)
+    draw.text((rx, HERO_TOP + 30), eta_str, font=get_font("hero"), fill=eta_color)
 
     if train.get("delay_min", 0) > 0:
-        draw.text((rx, HERO_TOP + 76), f"+{train['delay_min']}m delay",
+        draw.text((rx, HERO_TOP + 64), f"+{train['delay_min']}m delay",
                   font=get_font("xs"), fill=(230, 120, 34))
     plt = train.get("platform", "")
     if plt:
-        draw.text((rx + 100, HERO_TOP + 76), f"PLT {plt}",
+        draw.text((rx + 100, HERO_TOP + 64), f"PLT {plt}",
                   font=get_font("xs"), fill=(60, 60, 60))
 
 def draw_platform_strip(draw) -> int:
@@ -317,23 +389,23 @@ def draw_platform_strip(draw) -> int:
     draw.rectangle([0, y, SCREEN_W, y + STRIP_H], fill=(6, 6, 6))
     draw.line([0, y + STRIP_H, SCREEN_W, y + STRIP_H], fill=BORDER)
 
-    f  = get_font("xs")
-    draw.text((4, y + 4), "PLT", font=f, fill=(40, 40, 40))
-    x  = 34
+    f  = get_font("sm")
+    draw.text((4, y + 6), "PLT", font=f, fill=(40, 40, 40))
+    x  = 36
     pf = state["platform_filter"]
     for label in ["ALL"] + platforms:
         active = (label == pf)
-        tw     = text_w(draw, label, f) + 8
-        brect  = [x, y+2, x+tw, y+STRIP_H-2]
+        tw     = text_w(draw, label, f) + 10
+        brect  = [x, y+3, x+tw, y+STRIP_H-3]
         if active:
-            draw.rounded_rectangle(brect, radius=2, fill=(25, 25, 25))
-            draw.rounded_rectangle(brect, radius=2, outline=(100, 100, 100))
-            draw.text((x+4, y+4), label, font=f, fill=WHITE)
+            draw.rounded_rectangle(brect, radius=3, fill=(25, 25, 25))
+            draw.rounded_rectangle(brect, radius=3, outline=(100, 100, 100))
+            draw.text((x+5, y+6), label, font=f, fill=WHITE)
         else:
-            draw.rounded_rectangle(brect, radius=2, outline=(30, 30, 30))
-            draw.text((x+4, y+4), label, font=f, fill=DIM)
-        x += tw + 4
-        if x > SCREEN_W - 12:
+            draw.rounded_rectangle(brect, radius=3, outline=(30, 30, 30))
+            draw.text((x+5, y+6), label, font=f, fill=DIM)
+        x += tw + 5
+        if x > SCREEN_W - 14:
             break
     return y + STRIP_H
 
@@ -341,7 +413,8 @@ def draw_upcoming_list(draw, top_y):
     trains  = state["station_trains"]
     pf      = state["platform_filter"]
     visible = [t for t in trains if pf == "ALL" or str(t.get("platform","")) == pf]
-    upcoming = visible[1:]
+    scroll  = state["list_scroll"]
+    upcoming = visible[1:][scroll:]  # skip hero train, then apply scroll
 
     h_y = top_y
     draw.rectangle([0, h_y, SCREEN_W, h_y + COL_H], fill=(10, 10, 10))
@@ -389,16 +462,19 @@ def draw_upcoming_list(draw, top_y):
         code   = t["line_code"]
         plat   = str(t.get("platform") or "–")
 
-        draw_badge(draw, 3, row_y+4, code, t.get("color","#888"),
-                   t.get("text_color","#fff"), t.get("shape","rect"), size=13)
+        # Colored left border for line identity
+        draw.rectangle([0, row_y, 3, row_y + ROW_H], fill=color)
+
+        draw_badge(draw, 5, row_y+3, code, t.get("color","#888"),
+                   t.get("text_color","#fff"), t.get("shape","rect"), size=14)
 
         dest = t.get("destination","").upper()[:11]
-        draw_text(draw, 36, row_y+4, dest, f_xs, bright, max_w=202)
+        draw_text(draw, 38, row_y+4, dest, f_xs, bright, max_w=196)
 
         if t.get("delay_min", 0) > 0:
-            draw.ellipse([242, row_y+6, 247, row_y+11], fill=(230,120,34))
+            draw.ellipse([240, row_y+6, 245, row_y+11], fill=(230,120,34))
 
-        draw.text((252, row_y+4), plat, font=f_xs, fill=(60,60,60))
+        draw.text((248, row_y+4), plat, font=f_xs, fill=(60,60,60))
 
         if eta <= 1:
             etxt, ecol = "NOW", ORANGE
@@ -523,22 +599,23 @@ FOOTER_BW = SCREEN_W // len(FOOTER_BUTTONS)
 def draw_footer(draw):
     draw.rectangle([0, FOOTER_Y, SCREEN_W, SCREEN_H], fill=(8,8,8))
     draw.line([0, FOOTER_Y, SCREEN_W, FOOTER_Y], fill=BORDER)
-    f = get_font("sm")
+    f = get_font("md")
+    ty = FOOTER_Y + (FOOTER_H - f.size) // 2  # vertically centered
     for i, (label, action) in enumerate(FOOTER_BUTTONS):
         bx     = i * FOOTER_BW
         active = (action == state["mode"])
-        brect  = [bx + 2, FOOTER_Y + 3, bx + FOOTER_BW - 2, SCREEN_H - 2]
+        brect  = [bx + 2, FOOTER_Y + 3, bx + FOOTER_BW - 2, SCREEN_H - 3]
         if active:
-            draw.rounded_rectangle(brect, radius=2, fill=(20,20,20))
-            draw.rounded_rectangle(brect, radius=2, outline=(80,80,80))
-            draw.text((bx + (FOOTER_BW - text_w(draw, label, f)) // 2, FOOTER_Y + 6),
+            draw.rounded_rectangle(brect, radius=3, fill=(20,20,20))
+            draw.rounded_rectangle(brect, radius=3, outline=(90,90,90))
+            draw.text((bx + (FOOTER_BW - text_w(draw, label, f)) // 2, ty),
                       label, font=f, fill=WHITE)
         else:
-            draw.rounded_rectangle(brect, radius=2, outline=(25,25,25))
-            draw.text((bx + (FOOTER_BW - text_w(draw, label, f)) // 2, FOOTER_Y + 6),
+            draw.rounded_rectangle(brect, radius=3, outline=(28,28,28))
+            draw.text((bx + (FOOTER_BW - text_w(draw, label, f)) // 2, ty),
                       label, font=f, fill=DIM)
     if state["demo_mode"]:
-        draw.text((SCREEN_W - 34, FOOTER_Y + 7), "DEMO",
+        draw.text((SCREEN_W - 36, FOOTER_Y + (FOOTER_H - 10) // 2), "DEMO",
                   font=get_font("xs"), fill=(50,40,10))
 
 # ── Touch input ───────────────────────────────────────────────────────────────
@@ -566,8 +643,18 @@ def find_touch_device():
     print("No touch device found — check /proc/bus/input/devices")
     return None
 
-_touch_x_max = SCREEN_W - 1
-_touch_y_max = SCREEN_H - 1
+# For this hardware (FT6236 on Adafruit PiTFT 2.8" landscape):
+#   raw_x = vertical axis, range 0–239 (0=bottom, 239=top)
+#   raw_y = horizontal axis, range 0–319 (0=left, 319=right)
+# Transform: screen_x = raw_y, screen_y = 239 - raw_x
+_touch_x_max = SCREEN_H - 1   # 239 — raw_x is the vertical axis
+_touch_y_max = SCREEN_W - 1   # 319 — raw_y is the horizontal axis
+
+def _map_touch(rx, ry, xmax, ymax):
+    # Swap axes, invert screen_y
+    sx = round(ry * (SCREEN_W - 1) / ymax)
+    sy = (SCREEN_H - 1) - round(rx * (SCREEN_H - 1) / xmax)
+    return sx, sy
 
 def _read_abs_max(event_dev, axis_code):
     try:
@@ -608,11 +695,10 @@ def handle_touch_events(q):
     ABS_X,  ABS_Y  = 0, 1
     ABS_MT_POSITION_X, ABS_MT_POSITION_Y = 53, 54
     BTN_TOUCH = 330
-
-    def scale(v, vmax, smax):
-        return round(v * (smax - 1) / vmax) if vmax != smax - 1 else v
+    DRAG_MIN  = 14   # raw_x units before treated as scroll, not tap
 
     x = y = 0
+    start_x = start_y = 0
     finger_down = False
 
     while True:
@@ -630,16 +716,21 @@ def handle_touch_events(q):
                     x = evalue
                 elif ecode in (ABS_Y, ABS_MT_POSITION_Y):
                     y = evalue
-                # ABS_MT_TRACKING_ID intentionally ignored — BTN_TOUCH is authoritative
 
             elif etype == EV_KEY and ecode == BTN_TOUCH:
-                if evalue:
+                if evalue:                       # finger down
                     finger_down = True
-                elif finger_down:
-                    # Finger lifted — emit tap with last known position
+                    start_x, start_y = x, y     # record contact position
+                elif finger_down:               # finger up
                     finger_down = False
-                    q.put((scale(x, _touch_x_max, SCREEN_W),
-                           scale(y, _touch_y_max, SCREEN_H)))
+                    dx = x - start_x            # raw_x delta = vertical screen movement
+                    if abs(dx) >= DRAG_MIN:
+                        # screen_y = (SCREEN_H-1) - raw_x → d(screen_y) = -dx
+                        q.put(("scroll", -dx))
+                    else:
+                        sx, sy = _map_touch(start_x, start_y,
+                                            _touch_x_max, _touch_y_max)
+                        q.put(("tap", sx, sy))
 
         except Exception as e:
             print(f"Touch read error: {e}")
@@ -688,6 +779,7 @@ def process_touch(x, y):
                 state["line_code"] = item["code"]
                 state["mode"]      = "line"
             threading.Thread(target=refresh_data, daemon=True).start()
+        state["list_scroll"] = 0
         return
 
     # Platform strip — full strip height
@@ -707,8 +799,25 @@ def process_touch(x, y):
                 return
             cx += tw + 4
 
+def process_scroll(dy):
+    """dy: screen pixels dragged (positive=down, negative=up)."""
+    if state["picker_open"]:
+        row_h   = 24 if state["picker_type"] == "station" else 36
+        visible = 8  if state["picker_type"] == "station" else 5
+        delta   = -round(dy / row_h)
+        limit   = max(0, len(state["picker_results"]) - visible)
+        state["picker_scroll"] = max(0, min(limit, state["picker_scroll"] + delta))
+    elif state["mode"] == "station":
+        trains  = state["station_trains"]
+        pf      = state["platform_filter"]
+        visible = [t for t in trains if pf == "ALL" or str(t.get("platform","")) == pf]
+        delta   = -round(dy / ROW_H)
+        limit   = max(0, len(visible) - 1 - 3)   # -1 for hero, ~3 visible rows
+        state["list_scroll"] = max(0, min(limit, state["list_scroll"] + delta))
+
 # ── Main loop ─────────────────────────────────────────────────────────────────
 def main():
+    _ensure_cjk_font()
     _open_fb()
 
     threading.Thread(target=background_loop, daemon=True).start()
@@ -725,9 +834,13 @@ def main():
 
         while not _touch_q.empty():
             try:
-                process_touch(*_touch_q.get_nowait())
+                event = _touch_q.get_nowait()
+                if event[0] == "tap":
+                    process_touch(event[1], event[2])
+                elif event[0] == "scroll":
+                    process_scroll(event[1])
             except Exception as e:
-                print(f"process_touch error: {e}")
+                print(f"touch event error: {e}")
 
         img  = Image.new("RGB", (SCREEN_W, SCREEN_H), BLACK)
         draw = ImageDraw.Draw(img)
