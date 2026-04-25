@@ -61,8 +61,9 @@ state = {
     "demo_mode": True,
     "connected": False,
     "last_update": 0,
+    "platform_filter": "ALL",   # "ALL" or specific platform label
     "picker_open": False,
-    "picker_type": None,        # "station" | "line"
+    "picker_type": None,        # "station" | "line" | "platform"
     "picker_results": [],
     "picker_scroll": 0,
     "picker_query": "",
@@ -175,10 +176,61 @@ def draw_line_badges(surf, y=22):
         if x > SCREEN_W - 20:
             break
 
+def _get_platforms(trains: list) -> list:
+    seen = set()
+    for t in trains:
+        p = str(t.get("platform") or "").strip()
+        if p and p != "–":
+            seen.add(p)
+    try:
+        return sorted(seen, key=lambda x: (float(x), x))
+    except Exception:
+        return sorted(seen)
+
+
+def draw_platform_strip(surf, trains, y=40):
+    platforms = _get_platforms(trains)
+    if len(platforms) <= 1:
+        return y  # nothing to show
+
+    pygame.draw.rect(surf, (6, 6, 6), (0, y, SCREEN_W, 16))
+    pygame.draw.line(surf, C_BORDER, (0, y + 16), (SCREEN_W, y + 16))
+    draw_text(surf, "PLT", 4, y + 4, fonts["sm"], (60, 60, 60))
+
+    x = 28
+    pf = state["platform_filter"]
+    for label in ["ALL"] + platforms:
+        active = (label == pf)
+        tw, th = fonts["sm"].size(label)
+        bw = tw + 6
+        brect = pygame.Rect(x, y + 2, bw, 12)
+        bg = (26, 26, 26) if active else (8, 8, 8)
+        border = (100, 100, 100) if active else (36, 36, 36)
+        fg = C_TEXT if active else (80, 80, 80)
+        pygame.draw.rect(surf, bg, brect, border_radius=2)
+        pygame.draw.rect(surf, border, brect, 1, border_radius=2)
+        draw_text(surf, label, brect.centerx - tw // 2, brect.centery - th // 2, fonts["sm"], fg)
+        x += bw + 3
+        if x > SCREEN_W - 10:
+            break
+
+    return y + 16
+
+
 def draw_station_board(surf):
     draw_line_badges(surf, y=22)
+
+    trains = state["station_trains"]
+
+    # Platform filter strip (returns next y position)
+    content_y = draw_platform_strip(surf, trains, y=40)
+
+    # Apply platform filter
+    pf = state["platform_filter"]
+    visible_trains = [t for t in trains if pf == "ALL" or str(t.get("platform", "")) == pf]
+
     # Column headers
-    hdr_y = 41
+    hdr_y = content_y
     pygame.draw.rect(surf, (14, 14, 14), (0, hdr_y, SCREEN_W, 14))
     draw_text(surf, "LINE", 4, hdr_y + 2, fonts["sm"], C_DIM)
     draw_text(surf, "DESTINATION", 34, hdr_y + 2, fonts["sm"], C_DIM)
@@ -186,48 +238,38 @@ def draw_station_board(surf):
     draw_text(surf, "MIN", 291, hdr_y + 2, fonts["sm"], C_DIM)
     pygame.draw.line(surf, C_BORDER, (0, hdr_y + 14), (SCREEN_W, hdr_y + 14))
 
-    trains = state["station_trains"]
     row_y = hdr_y + 15
     row_h = 18
-    max_rows = 10
 
-    if not trains:
-        draw_text(surf, "No service data", SCREEN_W // 2 - 40, row_y + 20, fonts["sm"], C_DIM)
+    if not visible_trains:
+        msg = f"No trains on platform {pf}" if pf != "ALL" else "No service data"
+        draw_text(surf, msg, SCREEN_W // 2 - 50, row_y + 20, fonts["sm"], C_DIM)
         return
 
-    for i, t in enumerate(trains[:max_rows]):
+    for i, t in enumerate(visible_trains):
         if row_y + row_h > SCREEN_H - 20:
             break
         line = next((l for l in state["all_lines"] if l["code"] == t["line_code"]), None)
         bg = (11, 11, 11) if i % 2 == 0 else C_BG
         pygame.draw.rect(surf, bg, (0, row_y, SCREEN_W, row_h))
 
-        # Inline badge
         if line:
             draw_badge(surf, 3, row_y + 3, t["line_code"], t["color"], t["text_color"], t.get("shape", "rect"), fonts["sm"])
 
-        # Destination
         dest = (t.get("destination") or "").upper()[:11]
-        color = hex_to_rgb(t.get("color", "#ffffff"))
-        color = brighten(color)
+        color = brighten(hex_to_rgb(t.get("color", "#ffffff")))
         draw_text(surf, dest, 34, row_y + 4, fonts["sm"], color, max_w=200)
 
-        # Delay dot
         if t.get("delay_min", 0) > 0:
             pygame.draw.circle(surf, (238, 136, 51), (240, row_y + 9), 3)
 
-        # Platform
         plat = str(t.get("platform") or "–")
         draw_text(surf, plat, 253, row_y + 4, fonts["sm"], C_DIM)
 
-        # ETA
         eta = t.get("eta_min", 0)
         if eta <= 1:
-            eta_color = C_ORANGE
+            eta_color = C_ORANGE if int(time.time() * 2) % 2 == 0 else (100, 50, 20)
             eta_str = "NOW"
-            # Blink
-            if int(time.time() * 2) % 2 == 0:
-                eta_color = (100, 50, 20)
         elif eta <= 3:
             eta_color = C_YELLOW
             eta_str = str(eta)
@@ -371,6 +413,7 @@ def handle_touch(pos, surf_size):
             if btn_x <= x <= btn_x + bw:
                 if action == "station":
                     state["mode"] = "station"
+                    state["platform_filter"] = "ALL"
                     state["picker_open"] = False
                     threading.Thread(target=refresh_data, daemon=True).start()
                 elif action == "line":
@@ -380,6 +423,25 @@ def handle_touch(pos, surf_size):
                 return
             btn_x += bw + 4
         return
+
+    # Platform strip tap (y 40-56 when strip is visible)
+    if state["mode"] == "station" and not state["picker_open"]:
+        trains = state["station_trains"]
+        platforms = _get_platforms(trains)
+        if len(platforms) > 1 and 40 <= y <= 56:
+            all_labels = ["ALL"] + platforms
+            # Reconstruct button x positions to find which was tapped
+            cx = 28
+            for label in all_labels:
+                try:
+                    tw = pygame.font.Font(None, 9).size(label)[0] + 6
+                except Exception:
+                    tw = len(label) * 6 + 6
+                if cx <= x <= cx + tw:
+                    state["platform_filter"] = label
+                    return
+                cx += tw + 3
+            return
 
     if state["picker_open"]:
         row_h = 18 if state["picker_type"] == "station" else 30
@@ -392,6 +454,7 @@ def handle_touch(pos, surf_size):
                 state["station_en"] = item["name_en"].upper()
                 state["station_ja"] = item.get("name_ja", "")
                 state["mode"] = "station"
+                state["platform_filter"] = "ALL"
             else:
                 state["line_code"] = item["code"]
                 state["mode"] = "line"
@@ -443,6 +506,13 @@ def main():
                     open_picker("line")
                 elif event.key == pygame.K_p:
                     open_picker("station")
+                elif event.key == pygame.K_f and state["mode"] == "station":
+                    # Cycle platform filter
+                    trains = state["station_trains"]
+                    plats = ["ALL"] + _get_platforms(trains)
+                    cur = state["platform_filter"]
+                    idx = plats.index(cur) if cur in plats else 0
+                    state["platform_filter"] = plats[(idx + 1) % len(plats)]
                 elif event.key == pygame.K_UP and state["picker_open"]:
                     state["picker_scroll"] = max(0, state["picker_scroll"] - 1)
                 elif event.key == pygame.K_DOWN and state["picker_open"]:

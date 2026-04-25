@@ -1,119 +1,82 @@
 /* ── Reset ──────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+@font-face { font-display: swap; }
+
 html, body {
   background: #111;
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: center;
   min-height: 100vh;
   font-family: 'Share Tech Mono', 'Courier New', monospace;
   color: #e0e0e0;
-  overflow: hidden;
 }
 
-/* ── 320×240 screen frame ──────────────────────────────────────────────── */
+/* ── 320×240 screen — dot matrix grid burned in ─────────────────────────── */
 #screen {
   width: 320px;
   height: 240px;
-  background: #080808;
+  background-color: #000;
+  /* Dot matrix LED grid — faint dots everywhere like unlit LEDs */
+  background-image: radial-gradient(circle, #1e1e1e 1px, transparent 1px);
+  background-size: 3.5px 3.5px;
   position: relative;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  border: 1px solid #222;
-  /* Subtle scanline overlay for CRT feel */
-  background-image: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 3px,
-    rgba(0,0,0,0.08) 3px,
-    rgba(0,0,0,0.08) 4px
-  );
+  border: 1px solid #1a1a1a;
+  flex-shrink: 0;
 }
 
-/* On Pi (kiosk mode) remove the border & center */
 @media (max-width: 320px) {
-  html, body { background: #080808; align-items: flex-start; }
+  html, body { background: #000; align-items: flex-start; }
   #screen { border: none; width: 100vw; height: 100vh; }
   .dev-only { display: none !important; }
 }
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
 #header {
-  height: 22px;
-  background: #0d0d0d;
-  border-bottom: 1px solid #1a1a1a;
+  height: 18px;
+  background: rgba(0,0,0,0.85);
+  border-bottom: 1px solid #1c1c1c;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 5px;
   flex-shrink: 0;
-}
-
-#header-left {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  overflow: hidden;
+  position: relative;
+  z-index: 1;
 }
 
 .station-ja {
   font-family: 'Noto Sans JP', sans-serif;
-  font-size: 11px;
-  color: #888;
-  white-space: nowrap;
+  font-size: 10px;
+  color: #666;
+  margin-right: 4px;
 }
 
 .station-en {
-  font-size: 11px;
-  font-weight: bold;
-  color: #e8e8e8;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #ddd;
+  letter-spacing: 0px;
+  text-shadow: 0 0 6px rgba(255,255,255,0.4);
   white-space: nowrap;
-  letter-spacing: 0.5px;
-  text-shadow: 0 0 8px rgba(255,255,255,0.3);
+  overflow: hidden;
+  max-width: 185px;
+  text-overflow: ellipsis;
 }
 
 #clock {
-  font-size: 11px;
-  color: #aaa;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: #555;
   letter-spacing: 0.5px;
   white-space: nowrap;
 }
 
-/* ── Line badge strip ───────────────────────────────────────────────────── */
-#line-badges {
-  height: 18px;
-  background: #060606;
-  border-bottom: 1px solid #181818;
-  display: flex;
-  align-items: center;
-  padding: 0 4px;
-  gap: 3px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.line-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 8px;
-  font-weight: bold;
-  height: 13px;
-  min-width: 18px;
-  padding: 0 2px;
-  cursor: pointer;
-  letter-spacing: 0px;
-  white-space: nowrap;
-  transition: filter 0.15s;
-}
-.line-badge:hover { filter: brightness(1.3); }
-.line-badge.shape-square { border-radius: 2px; }
-.line-badge.shape-circle { border-radius: 50%; min-width: 13px; width: 13px; }
-.line-badge.shape-rect   { border-radius: 3px; }
-
-/* ── Content area ───────────────────────────────────────────────────────── */
+/* ── Content ────────────────────────────────────────────────────────────── */
 #content {
   flex: 1;
   position: relative;
@@ -126,220 +89,356 @@ html, body {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s;
-}
-.mode-view.active {
-  opacity: 1;
-  pointer-events: all;
-}
-
-/* ── Station board ──────────────────────────────────────────────────────── */
-#station-board {
   display: flex;
   flex-direction: column;
 }
+.mode-view.active { opacity: 1; pointer-events: all; }
 
-.board-row {
+/* ── Station board ──────────────────────────────────────────────────────── */
+
+/* ── Next train HERO CARD ───────────────────────────────────────────────── */
+#next-card {
+  height: 95px;
   display: flex;
-  align-items: center;
-  height: 18px;
-  padding: 0 4px;
-  border-bottom: 1px solid #111;
-  font-size: 10px;
-  letter-spacing: 0.3px;
-  white-space: nowrap;
+  align-items: stretch;
+  border-bottom: 1px solid #1a1a1a;
+  background: rgba(0,0,0,0.5);
+  flex-shrink: 0;
 }
 
-.board-head {
-  background: #0e0e0e;
-  color: #555;
+/* Left column — large line badge */
+#next-badge-wrap {
+  width: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 8px;
+}
+
+#next-badge {
+  width: 78px;
+  height: 78px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 20px;
+  color: #000;
+  /* shape set inline via JS */
+  transition: background 0.3s, box-shadow 0.3s;
+  position: relative;
+}
+
+/* Dot grid overlay on the badge — makes it look like lit LEDs */
+#next-badge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(0,0,0,0.25) 1px, transparent 1px);
+  background-size: 3.5px 3.5px;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* Right column — train info */
+#next-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 8px 8px 8px 0;
+  gap: 4px;
+  overflow: hidden;
+}
+
+#next-line-name {
+  font-family: 'Share Tech Mono', monospace;
   font-size: 9px;
+  color: #555;
   letter-spacing: 0.5px;
-  height: 15px;
+  text-transform: uppercase;
+}
+
+#next-dest {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* color + text-shadow set inline via JS (line color + glow) */
+}
+
+#next-eta-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+#next-eta {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 18px;
+  /* color set inline */
+}
+
+#next-delay {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  color: #e87722;
+}
+
+#next-platform {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  color: #444;
+  letter-spacing: 0.3px;
+}
+
+/* ETA blink when arriving */
+@keyframes led-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.2; }
+}
+.eta-arriving { animation: led-blink 0.7s ease-in-out infinite; }
+
+/* ── Platform filter strip ──────────────────────────────────────────────── */
+#platform-strip {
+  height: 14px;
+  background: rgba(0,0,0,0.7);
+  border-bottom: 1px solid #161616;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  gap: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+#platform-strip.hidden { display: none; }
+
+.plt-label {
+  font-size: 7px;
+  color: #333;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+  font-family: 'Press Start 2P', monospace;
+}
+
+#platform-buttons { display: flex; gap: 2px; align-items: center; overflow: hidden; }
+
+.plt-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  background: transparent;
+  border: 1px solid #222;
+  color: #444;
+  padding: 1px 3px;
+  height: 10px;
+  line-height: 8px;
+  border-radius: 1px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.1s;
+  display: flex;
+  align-items: center;
+}
+.plt-btn:hover  { color: #aaa; border-color: #444; }
+.plt-btn.active {
+  color: #fff;
+  border-color: #888;
+  background: #111;
+  text-shadow: 0 0 6px #fff;
+}
+
+/* ── Upcoming trains list ───────────────────────────────────────────────── */
+.upcoming-head {
+  display: flex;
+  align-items: center;
+  height: 13px;
+  padding: 0 4px;
+  background: rgba(0,0,0,0.8);
+  border-bottom: 1px solid #161616;
+  flex-shrink: 0;
+}
+.upcoming-head span {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  color: #333;
+  letter-spacing: 0.3px;
 }
 
 .col-line { width: 28px; flex-shrink: 0; }
 .col-dest { flex: 1; overflow: hidden; text-overflow: ellipsis; }
-.col-plat { width: 22px; flex-shrink: 0; text-align: center; color: #777; }
+.col-plat { width: 22px; flex-shrink: 0; text-align: center; }
 .col-time { width: 28px; flex-shrink: 0; text-align: right; }
 
-.train-row {
-  cursor: default;
-  transition: background 0.1s;
+#train-list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
 }
-.train-row:hover { background: rgba(255,255,255,0.03); }
+#train-list::-webkit-scrollbar { display: none; }
+
+.board-row {
+  display: flex;
+  align-items: center;
+  height: 17px;
+  padding: 0 4px;
+  border-bottom: 1px solid #0e0e0e;
+}
+
+.train-row { cursor: default; }
+.train-row:nth-child(even) { background: rgba(255,255,255,0.01); }
 
 .train-row .col-dest {
-  font-size: 10px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
   font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Delay indicator */
-.delay-dot {
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #e83;
-  margin-left: 3px;
-  vertical-align: middle;
+.col-time .time-val {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
 }
+.time-val.arriving { color: #ff6020; text-shadow: 0 0 8px #ff6020; }
+.time-val.soon     { color: #ffd700; text-shadow: 0 0 6px #ffd70080; }
+.time-val.normal   { color: #9acd32; text-shadow: 0 0 4px #9acd3260; }
 
-.time-val {
-  font-size: 11px;
-  font-weight: bold;
-}
-.time-val.arriving { color: #ff6b35; }
-.time-val.soon     { color: #ffd700; }
-.time-val.normal   { color: #9acd32; }
-
-/* Inline line badge in board rows */
+/* Inline badge for list rows */
 .inline-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 7px;
-  font-weight: bold;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
   height: 11px;
   min-width: 16px;
   padding: 0 2px;
-  letter-spacing: 0;
   vertical-align: middle;
 }
 .inline-badge.shape-square { border-radius: 1px; }
 .inline-badge.shape-circle { border-radius: 50%; width: 11px; min-width: 11px; }
 .inline-badge.shape-rect   { border-radius: 2px; }
 
+.delay-dot {
+  display: inline-block;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: #e87722;
+  box-shadow: 0 0 4px #e87722;
+  margin-left: 3px;
+  vertical-align: middle;
+}
+
+/* Time section divider */
+.time-divider {
+  display: flex;
+  align-items: center;
+  height: 11px;
+  padding: 0 4px;
+  background: transparent;
+  gap: 4px;
+}
+.time-divider-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 5px;
+  color: #2a2a2a;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.time-divider-line { flex: 1; height: 1px; background: #161616; }
+
 #no-trains {
-  color: #444;
-  font-size: 10px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #333;
   text-align: center;
-  margin-top: 20px;
+  margin-top: 16px;
+  line-height: 1.8;
 }
 
 /* ── Line tracker ───────────────────────────────────────────────────────── */
-#line-tracker {
-  display: flex;
-  flex-direction: column;
-}
+#line-tracker { overflow: hidden; }
 
 #tracker-line-name {
-  height: 20px;
+  height: 22px;
   display: flex;
   align-items: center;
   padding: 0 6px;
-  background: #0d0d0d;
+  background: rgba(0,0,0,0.8);
   border-bottom: 1px solid #1a1a1a;
-  font-size: 11px;
+  font-size: 10px;
   color: #ccc;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 #tracker-trains {
   flex: 1;
   overflow-y: auto;
-  overflow-x: hidden;
   scrollbar-width: none;
 }
 #tracker-trains::-webkit-scrollbar { display: none; }
 
 .tracker-train {
-  padding: 4px 6px;
+  padding: 5px 6px 4px;
   border-bottom: 1px solid #111;
 }
-
 .tracker-train-header {
   display: flex;
   align-items: center;
   gap: 5px;
-  margin-bottom: 3px;
+  margin-bottom: 4px;
 }
-
-.tracker-train-num {
-  font-size: 9px;
-  color: #666;
-}
-
+.tracker-train-num { font-size: 8px; color: #555; font-family: 'Share Tech Mono', monospace; }
 .tracker-dest {
-  font-size: 10px;
-  font-weight: bold;
-  flex: 1;
-}
-
-.tracker-delay {
-  font-size: 9px;
-  color: #e83;
-}
-
-/* Station progress bar */
-.station-progress {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  overflow: hidden;
-}
-
-.prog-station {
-  font-size: 7.5px;
-  color: #444;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  max-width: 55px;
-  text-align: center;
-}
-
-.prog-station.current {
-  color: #fff;
+  font-family: 'Press Start 2P', monospace;
   font-size: 8px;
-}
-.prog-station.next { color: #aaa; }
-
-.prog-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #333;
-  flex-shrink: 0;
-  margin: 0 1px;
-}
-.prog-dot.current { background: #fff; width: 6px; height: 6px; }
-.prog-dot.passed  { background: #555; }
-
-.prog-line {
-  height: 1px;
   flex: 1;
-  background: #222;
-  flex-shrink: 0;
-  min-width: 4px;
-  max-width: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.prog-line.passed { background: #555; }
+.tracker-delay { font-size: 8px; color: #e87722; font-family: 'Share Tech Mono', monospace; }
 
-/* ── Overlays (pickers) ─────────────────────────────────────────────────── */
+.station-progress { display: flex; align-items: center; }
+.prog-station { font-size: 7px; color: #3a3a3a; white-space: nowrap; overflow: hidden; max-width: 52px; text-align: center; font-family: 'Share Tech Mono', monospace; }
+.prog-station.current { color: #ddd; font-size: 7.5px; text-shadow: 0 0 6px rgba(255,255,255,0.3); }
+.prog-station.next { color: #888; }
+.prog-dot { width: 4px; height: 4px; border-radius: 50%; background: #2a2a2a; flex-shrink: 0; margin: 0 1px; }
+.prog-dot.current { width: 6px; height: 6px; }
+.prog-line { height: 1px; flex: 1; background: #1e1e1e; min-width: 4px; max-width: 14px; }
+.prog-line.passed { background: #444; }
+
+/* ── Overlays ───────────────────────────────────────────────────────────── */
 .overlay {
   position: absolute;
   inset: 0;
-  background: rgba(8,8,8,0.97);
+  background: rgba(0,0,0,0.96);
   z-index: 10;
   display: flex;
   flex-direction: column;
 }
-
 .overlay.hidden { display: none; }
 
 .overlay-title {
-  font-size: 10px;
-  color: #666;
-  letter-spacing: 1px;
-  padding: 5px 6px 3px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #444;
+  letter-spacing: 0.5px;
+  padding: 6px 6px 4px;
   border-bottom: 1px solid #1a1a1a;
 }
 
 #station-search {
-  background: #111;
+  background: #080808;
   border: none;
-  border-bottom: 1px solid #222;
-  color: #e0e0e0;
+  border-bottom: 1px solid #1e1e1e;
+  color: #ddd;
   font-family: 'Share Tech Mono', monospace;
   font-size: 11px;
   padding: 5px 6px;
@@ -347,38 +446,23 @@ html, body {
   width: 100%;
 }
 
-#station-results, #line-results {
-  flex: 1;
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-#station-results::-webkit-scrollbar,
-#line-results::-webkit-scrollbar { display: none; }
+#station-results, #line-results { flex: 1; overflow-y: auto; scrollbar-width: none; }
+#station-results::-webkit-scrollbar, #line-results::-webkit-scrollbar { display: none; }
 
 .picker-item {
   padding: 5px 6px;
   font-size: 10px;
   cursor: pointer;
-  border-bottom: 1px solid #111;
+  border-bottom: 1px solid #0e0e0e;
   display: flex;
   align-items: center;
   gap: 5px;
+  font-family: 'Share Tech Mono', monospace;
 }
-.picker-item:hover, .picker-item:active {
-  background: rgba(255,255,255,0.06);
-}
-.picker-item .item-ja {
-  font-family: 'Noto Sans JP', sans-serif;
-  font-size: 9px;
-  color: #666;
-}
-.picker-line-badges {
-  display: flex;
-  gap: 2px;
-  margin-left: auto;
-}
+.picker-item:hover, .picker-item:active { background: rgba(255,255,255,0.05); }
+.picker-item .item-ja { font-family: 'Noto Sans JP', sans-serif; font-size: 9px; color: #555; }
+.picker-line-badges { display: flex; gap: 2px; margin-left: auto; }
 
-/* Line picker grid */
 #line-results {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -390,109 +474,112 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   cursor: pointer;
-  padding: 4px 2px;
+  padding: 5px 2px;
   border-radius: 3px;
   transition: background 0.1s;
 }
-.line-picker-item:hover { background: rgba(255,255,255,0.06); }
-.line-picker-item .lp-code {
+.line-picker-item:hover { background: rgba(255,255,255,0.05); }
+.line-picker-item .lp-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Press Start 2P', monospace;
   font-size: 8px;
-  color: #888;
+  width: 28px;
+  height: 20px;
+}
+.line-picker-item .lp-code {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 5px;
+  color: #555;
+  text-align: center;
 }
 
 /* ── Footer nav ─────────────────────────────────────────────────────────── */
 #footer {
-  height: 20px;
-  background: #0a0a0a;
-  border-top: 1px solid #1a1a1a;
+  height: 19px;
+  background: rgba(0,0,0,0.9);
+  border-top: 1px solid #161616;
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  gap: 2px;
-  padding: 0 3px;
+  gap: 3px;
+  padding: 0 4px;
 }
 
 .nav-btn {
   background: transparent;
-  border: 1px solid #222;
-  color: #555;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 8px;
-  padding: 2px 5px;
+  border: 1px solid #1e1e1e;
+  color: #444;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  padding: 2px 6px;
   cursor: pointer;
+  border-radius: 1px;
   letter-spacing: 0.3px;
-  border-radius: 2px;
+  height: 13px;
   display: flex;
   align-items: center;
-  gap: 2px;
   transition: all 0.1s;
   white-space: nowrap;
 }
 .nav-btn:hover  { color: #aaa; border-color: #444; }
-.nav-btn.active { color: #fff; border-color: #555; background: #141414; }
-.btn-icon { font-size: 9px; }
+.nav-btn.active {
+  color: #fff;
+  border-color: #666;
+  background: #111;
+  text-shadow: 0 0 6px rgba(255,255,255,0.5);
+}
 
 .demo-badge {
   margin-left: auto;
-  font-size: 8px;
-  color: #664;
-  border: 1px solid #332;
-  padding: 1px 4px;
-  border-radius: 2px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 5px;
+  color: #443300;
+  border: 1px solid #332200;
+  padding: 2px 4px;
   letter-spacing: 0.5px;
 }
 .demo-badge.hidden { display: none; }
 
-/* ── Dev controls (outside 320×240 frame) ─────────────────────────────── */
+/* ── Dev controls ─────────────────────────────────────────────────────────*/
 .dev-only {
-  margin-top: 16px;
-  padding: 12px 16px;
-  background: #0e0e0e;
-  border: 1px solid #1a1a1a;
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: #0a0a0a;
+  border: 1px solid #181818;
   width: 320px;
   font-family: 'Share Tech Mono', monospace;
   font-size: 11px;
   color: #888;
 }
 .dev-label {
-  font-size: 9px;
-  letter-spacing: 1px;
-  color: #444;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  letter-spacing: 0.5px;
+  color: #333;
   margin-bottom: 8px;
-  border-bottom: 1px solid #1a1a1a;
-  padding-bottom: 5px;
+  border-bottom: 1px solid #181818;
+  padding-bottom: 6px;
 }
-.dev-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 5px;
-  flex-wrap: wrap;
-}
+.dev-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; flex-wrap: wrap; }
 .dev-row select, .dev-row button {
-  background: #111;
-  border: 1px solid #222;
-  color: #aaa;
+  background: #0c0c0c;
+  border: 1px solid #1e1e1e;
+  color: #888;
   font-family: inherit;
   font-size: 10px;
   padding: 2px 5px;
   cursor: pointer;
 }
 .dev-row select { max-width: 180px; }
-.dev-row button:hover { border-color: #444; color: #ddd; }
+.dev-row button:hover { border-color: #333; color: #ccc; }
 
-/* ── Animations ─────────────────────────────────────────────────────────── */
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+/* ── Slide-in animation for new rows ──────────────────────────────────── */
+@keyframes row-in {
+  from { opacity: 0; transform: translateX(-4px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
-
-.arriving-blink { animation: blink 0.8s ease-in-out infinite; }
-
-@keyframes slide-in {
-  from { transform: translateY(-4px); opacity: 0; }
-  to   { transform: translateY(0);    opacity: 1; }
-}
-.train-row { animation: slide-in 0.2s ease-out; }
+.train-row { animation: row-in 0.15s ease-out; }

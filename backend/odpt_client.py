@@ -198,7 +198,26 @@ class ODPTClient:
         for line_code in station.get("lines", []):
             results.extend(self._demo_line_trains(station_id, line_code, seed))
         results.sort(key=lambda x: x["eta_min"])
-        return results[:16]
+        return results  # no cap — caller sees the full hour
+
+    # Stable per-line platform assignment: same line at same station always maps
+    # to the same platform number. Two directions of the same line get adjacent
+    # platforms (e.g. JY at Shibuya → platforms 1 and 2).
+    _PLATFORM_COUNTS = {
+        "shinjuku": 20, "tokyo": 12, "ikebukuro": 8, "shibuya": 8,
+        "shinagawa": 6, "ueno": 8, "shimbashi": 6, "akihabara": 4,
+    }
+
+    def _station_platform(self, station_id: str, line_code: str, direction: int = 0) -> str:
+        """Return a stable platform label for a line at a station."""
+        max_plt = self._PLATFORM_COUNTS.get(station_id, 4)
+        # Deterministic base platform index per station+line
+        base = (abs(hash(station_id + line_code)) % max_plt) + 1
+        # Direction 1 gets the adjacent platform (wrapping within count)
+        plt = base + direction
+        if plt > max_plt:
+            plt = max(1, base - 1)
+        return str(plt)
 
     def _demo_line_trains(self, station_id: str, line_code: str, seed: int = None) -> list:
         line = LINES.get(line_code, {})
@@ -209,9 +228,12 @@ class ODPTClient:
         rng = random.Random(seed + hash(station_id + line_code))
         trains = []
         offset = rng.randint(0, hw - 1)
-        for i in range(2):
-            eta = offset + i * hw + rng.randint(0, 2)
-            dest = rng.choice(terminals)
+        i = 0
+        eta = offset
+        while eta <= 60:
+            # Alternate direction each train (inbound/outbound on adjacent platforms)
+            direction = i % 2
+            dest = terminals[i % len(terminals)]
             delay = rng.choice([0, 0, 0, 1, 2]) if _is_peak() else 0
             trains.append({
                 "line_code": line_code,
@@ -219,13 +241,15 @@ class ODPTClient:
                 "color": line.get("color", "#ffffff"),
                 "text_color": line.get("text", "#000000"),
                 "shape": line.get("shape", "rect"),
-                "train_number": f"{line_code}{rng.randint(100,999)}",
+                "train_number": f"{line_code}{(rng.randint(100, 999) + i) % 900 + 100}",
                 "destination": dest,
-                "platform": str(rng.randint(1, 4)),
+                "platform": self._station_platform(station_id, line_code, direction),
                 "delay_min": delay,
                 "eta_min": max(1, eta),
                 "direction": "",
             })
+            i += 1
+            eta += hw + rng.randint(-1, 1)  # slight jitter per train
         return trains
 
     def _demo_line_all_trains(self, line_code: str) -> list:

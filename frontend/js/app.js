@@ -9,6 +9,7 @@ const app = (() => {
   let mode = 'station';          // 'station' | 'line'
   let currentStation = 'shibuya';
   let currentLine = 'JY';
+  let currentPlatform = 'ALL';   // 'ALL' or platform label string
   let allStations = [];
   let allLines = [];
   let tickInterval = null;
@@ -135,16 +136,15 @@ const app = (() => {
     if (m === 'station') {
       document.getElementById('station-board').classList.add('active');
       document.getElementById('btn-station').classList.add('active');
-      document.getElementById('line-badges').style.display = 'flex';
       const devRow = document.getElementById('dev-line-row');
       if (devRow) devRow.style.display = 'none';
     } else {
       document.getElementById('line-tracker').classList.add('active');
       document.getElementById('btn-line').classList.add('active');
-      document.getElementById('line-badges').style.display = 'none';
+      const strip = document.getElementById('platform-strip');
+      if (strip) strip.classList.add('hidden');
       const devRow = document.getElementById('dev-line-row');
       if (devRow) devRow.style.display = 'flex';
-      // Open line picker so user can choose a line
       if (!skipPicker) openLinePicker();
     }
     refresh();
@@ -152,15 +152,22 @@ const app = (() => {
 
   function selectStation(stationId) {
     currentStation = stationId;
+    currentPlatform = 'ALL';
     const station = allStations.find(s => s.id === stationId);
     if (station) {
       document.getElementById('station-en').textContent = station.name_en.toUpperCase();
       document.getElementById('station-ja').textContent = station.name_ja;
-      renderLineBadges(station.lines);
     }
+    renderPlatformStrip([]);
     const devSel = document.getElementById('dev-station-select');
     if (devSel) devSel.value = stationId;
     if (mode === 'station') refresh();
+  }
+
+  function selectPlatform(plt) {
+    currentPlatform = plt;
+    // Full re-render so hero card also updates to the right platform's next train
+    refresh();
   }
 
   function selectLine(lineCode) {
@@ -170,26 +177,93 @@ const app = (() => {
     if (mode === 'line') refresh();
   }
 
-  // ── Line badges strip ───────────────────────────────────────────────────
+  // ── Hero card ── renders the next train prominently ────────────────────
 
-  function renderLineBadges(lineCodes) {
-    const strip = document.getElementById('line-badges');
-    strip.innerHTML = '';
-    lineCodes.forEach(code => {
-      const line = allLines.find(l => l.code === code);
-      if (!line) return;
-      const el = document.createElement('span');
-      el.className = `line-badge shape-${line.shape}`;
-      el.style.background = line.color;
-      el.style.color = line.text_color;
-      el.textContent = code;
-      el.title = line.name;
-      el.addEventListener('click', () => {
-        setMode('line');
-        selectLine(code);
-      });
-      strip.appendChild(el);
+  function renderHeroCard(train) {
+    if (!train) {
+      document.getElementById('next-badge').textContent = '?';
+      document.getElementById('next-badge').style.cssText = 'background:#1a1a1a;border-radius:4px;';
+      document.getElementById('next-line-name').textContent = '';
+      document.getElementById('next-dest').textContent = 'NO SERVICE';
+      document.getElementById('next-eta').textContent = '–';
+      document.getElementById('next-delay').textContent = '';
+      document.getElementById('next-platform').textContent = '';
+      return;
+    }
+    const line = allLines.find(l => l.code === train.line_code) || train;
+    const shape = train.shape || line.shape || 'rect';
+    const borderRadius = shape === 'circle' ? '50%' : shape === 'square' ? '4px' : '8px';
+    const glow = `0 0 18px ${train.color}99, 0 0 36px ${train.color}44`;
+
+    const badge = document.getElementById('next-badge');
+    badge.textContent = train.line_code;
+    badge.style.cssText = `background:${train.color};color:${train.text_color};border-radius:${borderRadius};box-shadow:${glow};`;
+
+    document.getElementById('next-line-name').textContent = line.name || line.short || '';
+
+    const destEl = document.getElementById('next-dest');
+    const bright = brighten(train.color);
+    destEl.textContent = `→ ${train.destination}`;
+    destEl.style.color = bright;
+    destEl.style.textShadow = `0 0 10px ${train.color}99, 0 0 20px ${train.color}44`;
+
+    const eta = train.eta_min;
+    const etaEl = document.getElementById('next-eta');
+    if (eta <= 1) {
+      etaEl.textContent = 'NOW';
+      etaEl.style.color = '#ff6020';
+      etaEl.style.textShadow = '0 0 12px #ff6020';
+      etaEl.classList.add('eta-arriving');
+    } else {
+      etaEl.classList.remove('eta-arriving');
+      etaEl.textContent = `${eta} MIN`;
+      etaEl.style.color = eta <= 4 ? '#ffd700' : '#9acd32';
+      etaEl.style.textShadow = eta <= 4
+        ? '0 0 10px #ffd70099'
+        : '0 0 8px #9acd3266';
+    }
+
+    const delayEl = document.getElementById('next-delay');
+    delayEl.textContent = train.delay_min > 0 ? `+${train.delay_min}m delay` : '';
+
+    document.getElementById('next-platform').textContent =
+      train.platform ? `PLATFORM ${train.platform}` : '';
+  }
+
+  // ── Platform filter strip ───────────────────────────────────────────────
+
+  function renderPlatformStrip(trains) {
+    const strip = document.getElementById('platform-strip');
+    const buttons = document.getElementById('platform-buttons');
+
+    // Collect unique platform labels, sorted numerically then alpha
+    const seen = new Set();
+    trains.forEach(t => { if (t.platform && t.platform !== '–') seen.add(t.platform); });
+    const platforms = [...seen].sort((a, b) => {
+      const na = parseFloat(a), nb = parseFloat(b);
+      if (!isNaN(na) && !isNaN(nb)) return na - nb;
+      return a.localeCompare(b);
     });
+
+    if (platforms.length <= 1) {
+      // Nothing useful to filter — hide strip
+      strip.classList.add('hidden');
+      return;
+    }
+
+    strip.classList.remove('hidden');
+
+    // Ensure currentPlatform is still valid; reset if the data no longer has it
+    if (currentPlatform !== 'ALL' && !platforms.includes(currentPlatform)) {
+      currentPlatform = 'ALL';
+    }
+
+    buttons.innerHTML = [
+      `<button class="plt-btn all-btn ${currentPlatform === 'ALL' ? 'active' : ''}" data-plt="ALL" onclick="app.selectPlatform('ALL')">ALL</button>`,
+      ...platforms.map(p =>
+        `<button class="plt-btn ${currentPlatform === p ? 'active' : ''}" data-plt="${p}" onclick="app.selectPlatform('${p}')">${p}</button>`
+      )
+    ].join('');
   }
 
   // ── Station board renderer ──────────────────────────────────────────────
@@ -199,39 +273,82 @@ const app = (() => {
     const noTrains = document.getElementById('no-trains');
 
     if (!trains || trains.length === 0) {
+      renderHeroCard(null);
       list.innerHTML = '';
+      noTrains.textContent = 'No service data';
       noTrains.classList.remove('hidden');
+      renderPlatformStrip([]);
       return;
     }
     noTrains.classList.add('hidden');
 
-    const MAX_ROWS = 10;
-    const rows = trains.slice(0, MAX_ROWS);
+    // Filter by platform if active, then pick hero from filtered set
+    const visible = currentPlatform === 'ALL'
+      ? trains
+      : trains.filter(t => (t.platform || '–') === currentPlatform);
 
-    list.innerHTML = rows.map(t => {
-      const line = allLines.find(l => l.code === t.line_code) || t;
+    // Hero card — always the next train (respects platform filter)
+    renderHeroCard(visible[0] || trains[0]);
+
+    // Update platform strip
+    renderPlatformStrip(trains);
+
+    // Upcoming list — skip the very first train (it's in the hero card)
+    const upcoming = visible.slice(1);
+
+    // Time buckets for section dividers (in minutes)
+    const BUCKETS = [
+      { max: 2,  label: 'ARRIVING' },
+      { max: 10, label: 'NEXT 10 MIN' },
+      { max: 20, label: '20 MIN' },
+      { max: 30, label: '30 MIN' },
+      { max: 45, label: '45 MIN' },
+      { max: 60, label: '1 HOUR' },
+    ];
+
+    let html = '';
+    let lastBucket = -1;
+
+    upcoming.forEach(t => {
       const eta = t.eta_min;
+      const bucketIdx = BUCKETS.findIndex(b => eta <= b.max);
+      const bucket = bucketIdx >= 0 ? BUCKETS[bucketIdx] : null;
+
+      if (bucket && bucketIdx !== lastBucket) {
+        html += `<div class="time-divider">
+          <span class="time-divider-label">${bucket.label}</span>
+          <span class="time-divider-line"></span>
+        </div>`;
+        lastBucket = bucketIdx;
+      }
+
+      const line = allLines.find(l => l.code === t.line_code) || t;
       let timeClass = 'normal';
       let timeText = `${eta}`;
-      let extraClass = '';
-      if (eta <= 1) { timeClass = 'arriving'; timeText = 'NOW'; extraClass = 'arriving-blink'; }
-      else if (eta <= 2) { timeClass = 'arriving'; }
-      else if (eta <= 4) { timeClass = 'soon'; }
+      if (eta <= 2) { timeClass = 'arriving'; timeText = eta <= 1 ? 'NOW' : `${eta}`; }
+      else if (eta <= 5) { timeClass = 'soon'; }
 
       const dest = truncate(t.destination, 11);
       const plat = t.platform || '–';
       const delayDot = t.delay_min > 0 ? `<span class="delay-dot" title="${t.delay_min}m delay"></span>` : '';
       const badgeShape = t.shape || line.shape || 'rect';
 
-      return `<div class="board-row train-row ${extraClass}">
+      html += `<div class="board-row train-row" data-platform="${plat}">
         <span class="col-line">
           <span class="inline-badge shape-${badgeShape}" style="background:${t.color};color:${t.text_color}">${t.line_code}</span>
         </span>
         <span class="col-dest" style="color:${brighten(t.color)}">${dest}${delayDot}</span>
-        <span class="col-plat">${plat}</span>
+        <span class="col-plat" style="font-size:8px;color:#555">${plat}</span>
         <span class="col-time"><span class="time-val ${timeClass}">${timeText}</span></span>
       </div>`;
-    }).join('');
+    });
+
+    list.innerHTML = html;
+
+    if (upcoming.length === 0 && currentPlatform !== 'ALL') {
+      noTrains.textContent = `No more trains\non platform ${currentPlatform}`;
+      noTrains.classList.remove('hidden');
+    }
   }
 
   // ── Line tracker renderer ───────────────────────────────────────────────
@@ -241,10 +358,12 @@ const app = (() => {
     if (!line) return;
 
     const nameEl = document.getElementById('tracker-line-name');
+    const shape = line.shape || 'rect';
+    const br = shape === 'circle' ? '50%' : shape === 'square' ? '2px' : '4px';
     nameEl.innerHTML = `
-      <span class="line-badge shape-${line.shape}" style="background:${line.color};color:${line.text_color};font-size:9px;height:14px;min-width:20px">${lineCode}</span>
-      <span style="color:${line.color};text-shadow:0 0 8px ${line.color}40">${line.name.toUpperCase()}</span>
-      <span style="font-size:9px;color:#444;margin-left:auto">${trains.length} TRAINS</span>
+      <span style="background:${line.color};color:${line.text_color};font-family:'Press Start 2P',monospace;font-size:7px;padding:2px 4px;border-radius:${br};box-shadow:0 0 8px ${line.color}88">${lineCode}</span>
+      <span style="font-family:'Press Start 2P',monospace;font-size:7px;color:${line.color};text-shadow:0 0 8px ${line.color}66">${line.short.toUpperCase()}</span>
+      <span style="font-size:8px;color:#333;margin-left:auto;font-family:'Share Tech Mono',monospace">${trains.length} trains</span>
     `;
 
     const container = document.getElementById('tracker-trains');
@@ -412,7 +531,7 @@ const app = (() => {
   }
 
   // Public API
-  return { init, setMode, selectStation, selectLine, openStationPicker, openLinePicker, _pickStation, _pickLine };
+  return { init, setMode, selectStation, selectLine, selectPlatform, openStationPicker, openLinePicker, _pickStation, _pickLine };
 })();
 
 document.addEventListener('DOMContentLoaded', () => app.init());
