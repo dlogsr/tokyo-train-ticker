@@ -21,7 +21,7 @@ sudo apt-get install -y --no-install-recommends \
 # ── 2. Python venv ─────────────────────────────────────────
 INSTALL_DIR="/opt/tokyo-train-ticker"
 sudo mkdir -p "$INSTALL_DIR"
-sudo chown pi:pi "$INSTALL_DIR"
+sudo chown "$USER:$USER" "$INSTALL_DIR"
 
 cp -r "$(dirname "$0")/../" "$INSTALL_DIR/"
 cd "$INSTALL_DIR"
@@ -86,7 +86,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
+User=$USER
 WorkingDirectory=${INSTALL_DIR}/backend
 EnvironmentFile=${INSTALL_DIR}/.env
 ExecStart=${INSTALL_DIR}/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
@@ -105,7 +105,7 @@ Requires=tokyo-train-backend.service
 
 [Service]
 Type=simple
-User=pi
+User=$USER
 WorkingDirectory=${INSTALL_DIR}/pi
 Environment=SDL_FBDEV=/dev/fb1
 Environment=SDL_VIDEODRIVER=fbcon
