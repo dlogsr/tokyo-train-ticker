@@ -950,20 +950,22 @@ def find_touch_device():
     print("No touch device found — check /proc/bus/input/devices")
     return None
 
-# For this hardware (FT6236 on Adafruit PiTFT 2.8" landscape):
-#   ABS_X (rx) = horizontal axis, 0=left, max=right
-#   ABS_Y (ry) = vertical axis,   0=top,  max=bottom
-# Transform: screen_x = rx * (319/xmax),  screen_y = ry * (239/ymax)
-_touch_x_max = SCREEN_W - 1   # 319 — ABS_X is the horizontal axis
-_touch_y_max = SCREEN_H - 1   # 239 — ABS_Y is the vertical axis
+# FT6236 on Adafruit PiTFT 2.8" is wired in portrait orientation (240×320)
+# but the display runs in landscape (320×240), so axes are 90° rotated:
+#   ABS_X (rx) = physical vertical axis, 0=top,   max=bottom  → screen_y
+#   ABS_Y (ry) = physical horizontal axis, 0=right, max=left  → screen_x (inverted)
+_touch_x_max = SCREEN_H - 1   # 239 — ABS_X covers the vertical range
+_touch_y_max = SCREEN_W - 1   # 319 — ABS_Y covers the horizontal range
 
 def _map_touch(rx, ry, xmax, ymax):
     if _calib:
         sx = round(_calib["sx_scale"] * rx + _calib["sx_offset"])
         sy = round(_calib["sy_scale"] * ry + _calib["sy_offset"])
     else:
-        sx = round(rx * (SCREEN_W - 1) / xmax)
-        sy = round(ry * (SCREEN_H - 1) / ymax)
+        # ABS_Y → screen_x (inverted: ry=0 is right edge)
+        sx = round((ymax - ry) * (SCREEN_W - 1) / ymax)
+        # ABS_X → screen_y (direct: rx=0 is top)
+        sy = round(rx * (SCREEN_H - 1) / xmax)
     return max(0, min(SCREEN_W - 1, sx)), max(0, min(SCREEN_H - 1, sy))
 
 def _read_abs_max(event_dev, axis_code):
@@ -1035,7 +1037,7 @@ def handle_touch_events(q):
                     start_x, start_y = x, y
                     sx0, sy0 = _map_touch(x, y, _touch_x_max, _touch_y_max)
                     _hold_consumed = False
-                    if sy0 >= FOOTER_Y:
+                    if sy0 >= FOOTER_Y and not state["confirm_exit"]:
                         _hold_start_time = finger_down_time
                         _hold_pos = (sx0, sy0)
                     else:
