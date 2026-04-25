@@ -31,7 +31,7 @@ python3 -m venv --clear venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r backend/requirements.txt
-pip install pygame httpx websockets
+pip install pygame httpx websockets Pillow numpy
 
 # ── 3. Adafruit PiTFT driver setup ─────────────────────────
 # Install the fbcp-ili9341 framebuffer copy driver OR
@@ -47,10 +47,11 @@ read -t 10 -p "Install Adafruit PiTFT drivers? [Y/n] " INSTALL_DRIVER || true
 INSTALL_DRIVER="${INSTALL_DRIVER:-Y}"
 
 if [[ "$INSTALL_DRIVER" =~ ^[Yy]$ ]]; then
+  sudo pip3 install adafruit-python-shell --break-system-packages -q
   cd /tmp
-  wget -O adafruit-pitft-helper.py https://raw.githubusercontent.com/adafruit/Raspberry-Pi-Installer-Scripts/main/adafruit-pitft.py
-  sudo python3 adafruit-pitft-helper.py --display=28r --rotation=90 --install-type=fbcp
-  # 28r = PiTFT 2.8" resistive, fbcp mirrors HDMI to TFT
+  wget -q -O adafruit-pitft-helper.py https://raw.githubusercontent.com/adafruit/Raspberry-Pi-Installer-Scripts/main/adafruit-pitft.py
+  sudo python3 adafruit-pitft-helper.py --display=28c --rotation=90 --install-type=fbcp
+  # 28c = PiTFT 2.8" capacitive, fbcp mirrors HDMI to TFT
   cd "$INSTALL_DIR"
 fi
 
@@ -108,9 +109,7 @@ Requires=tokyo-train-backend.service
 Type=simple
 User=$USER
 WorkingDirectory=${INSTALL_DIR}/pi
-Environment=SDL_FBDEV=/dev/fb1
-Environment=SDL_VIDEODRIVER=fbcon
-Environment=SDL_NOMOUSE=1
+Environment=FB_DEV=/dev/fb1
 Environment=API_BASE=http://localhost:8000
 ExecStartPre=/bin/sleep 3
 ExecStart=${INSTALL_DIR}/venv/bin/python3 pygame_display.py
@@ -121,6 +120,7 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
+sudo usermod -a -G video "$USER"
 sudo systemctl daemon-reload
 sudo systemctl enable tokyo-train-backend
 sudo systemctl enable tokyo-train-display
