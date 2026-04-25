@@ -3,20 +3,188 @@
 const API = window.location.origin;
 const WS_URL = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`;
 
+// ── Japanese lookup tables (mirrors pygame_display.py) ────────────────────────
+const DEST_JA = {
+  "IKEBUKURO":"池袋",    "SHIBUYA":"渋谷",      "SHINJUKU":"新宿",
+  "UENO":"上野",          "TOKYO":"東京",         "TAKAO":"高尾",
+  "TACHIKAWA":"立川",    "OGIKUBO":"荻窪",       "CHIBA":"千葉",
+  "MITAKA":"三鷹",       "OMIYA":"大宮",          "OFUNA":"大船",
+  "YOKOHAMA":"横浜",     "OSAKI":"大崎",          "UTSUNOMIYA":"宇都宮",
+  "TAKASAKI":"高崎",     "KAMAKURA":"鎌倉",       "ZUSHI":"逗子",
+  "SHINAGAWA":"品川",    "NARITA":"成田",
+  "ASAKUSA":"浅草",      "GINZA":"銀座",           "HONANCHO":"方南町",
+  "KITASENJU":"北千住",  "NAKAMEGURO":"中目黒",    "NAKA-MEGURO":"中目黒",
+  "NAKANO":"中野",       "NISHIFUNABASHI":"西船橋","NISHI-FUNABASHI":"西船橋",
+  "YOYOGI-UEHARA":"代々木上原","AYASE":"綾瀬",    "ABIKO":"我孫子",
+  "WAKOSHI":"和光市",    "SHIN-KIBA":"新木場",     "SHINKIBA":"新木場",
+  "OSHIAGE":"押上",      "NAGATSUTA":"長津田",     "TOCHOMAE":"都庁前",
+  "MEGURO":"目黒",       "NISHI-TAKASHIMADAIRA":"西高島平",
+  "MOTOMACHI-CHUKAGAI":"元町・中華街",
+  "NISHI-MAGOME":"西馬込",        "HIKARIGAOKA":"光が丘",
+  "NERIMA-KASUGACHO":"練馬春日町",
+  "FUTAKO-TAMAGAWA":"二子玉川",   "MIZONOKUCHI":"溝の口",
+  "MOTOSUMIYOSHI":"元住吉",       "CHOFU":"調布",
+  "HASHIMOTO":"橋本",             "KEIO-HACHIOJI":"京王八王子",
+  "KEIO-SAGAMIHARA":"京王相模原", "KICHIJOJI":"吉祥寺",
+  "ODAWARA":"小田原",             "FUJISAWA":"藤沢",
+  "KARAKIDA":"唐木田",            "KATASE-ENOSHIMA":"片瀬江ノ島",
+  "HANNO":"飯能",                 "OGOSE":"越生",
+  "KAWAGOE":"川越",               "TOBU-NIKKO":"東武日光",
+  "AIZUWAKAMATSU":"会津若松",     "URAGA":"浦賀",
+  "NARITA-SKYACCESS":"成田スカイアクセス",
+  "HANEDA-AIRPORT":"羽田空港",    "NARITA-AIRPORT":"成田空港",
+  "HANEDA-AIRPORT-T1":"羽田空港第1ターミナル",
+  "TOYOSU":"豊洲",   "SHIMBASHI":"新橋",          "HAMAMATSUCHO":"浜松町",
+  "URAWA-MISONO":"浦和美園",      "SHINOZAKIMACHI":"篠崎",
+  "HANA-KOGANEI":"花小金井",      "NISHI-SHINJUKU":"西新宿",
+  "MUSASHI-KYURYO":"武蔵丘",
+};
+
+const LINE_NAME_JA = {
+  "JY":"山手線",       "JC":"中央線",         "JB":"中央・総武線",
+  "JK":"京浜東北線",   "JA":"埼京線",          "JH":"横須賀線",
+  "JU":"宇都宮・高崎線","JE":"京葉線",         "JO":"横須賀・総武線",
+  "G":"銀座線",        "M":"丸ノ内線",         "H":"日比谷線",
+  "T":"東西線",        "C":"千代田線",         "Y":"有楽町線",
+  "Z":"半蔵門線",      "N":"南北線",            "F":"副都心線",
+  "A":"浅草線",        "I":"三田線",            "S":"新宿線",
+  "E":"大江戸線",
+  "TY":"東横線",       "DT":"田園都市線",      "OM":"大井町線",
+  "MG":"目黒線",       "KK":"空港線",
+  "KO":"京王線",       "KL":"京王相模原線",    "KI":"井の頭線",
+  "OH":"小田原線",     "OE":"江ノ島線",
+  "SI":"池袋線",       "SS":"新宿線",
+  "TJ":"東上線",       "TS":"スカイツリーライン",
+  "KS":"本線",         "KE":"本線",
+  "MM":"みなとみらい線","SR":"埼玉高速鉄道線",
+  "RI":"りんかい線",   "YU":"ゆりかもめ",
+  "MO":"東京モノレール",
+};
+
+const CARS = {
+  "JY":10,"JC":10,"JB":10,"JK":10,"JA":10,"JH":15,"JU":15,"JE":10,
+  "G":6,"M":6,"H":8,"T":10,"C":10,"Y":10,"Z":8,"N":6,"F":10,
+  "A":5,"I":6,"S":10,"E":12,
+  "TY":8,"DT":8,"OM":6,"MG":6,"KK":6,
+  "KO":8,"KL":8,"KI":7,
+  "OH":10,"OE":8,
+  "SI":10,"SS":10,"TJ":8,"TS":8,
+  "KS":8,"KE":8,"MM":6,"SR":6,"RI":10,
+};
+
+// ── Operator logo SVGs ─────────────────────────────────────────────────────────
+function operatorLogoHTML(operator, code, color, textColor) {
+  // 5-point star polygon for Tokyu, center (34,30), outer=22, inner=9
+  const star = "34,8 39.3,22.7 54.9,23.2 42.6,32.8 46.9,47.8 34,39 21.1,47.8 25.4,32.8 13.1,23.2 28.7,22.7";
+
+  switch (operator) {
+    case 'JR-East':
+      return `<svg viewBox="0 0 68 68" class="op-logo">
+        <rect width="68" height="68" rx="5" fill="#161616"/>
+        <circle cx="58" cy="10" r="5" fill="#c84614"/>
+        <text x="34" y="38" font-size="24" fill="#dcdcdc" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-weight="bold">JR</text>
+      </svg>`;
+
+    case 'TokyoMetro':
+      return `<svg viewBox="0 0 68 68" class="op-logo">
+        <rect width="68" height="68" rx="7" fill="#009de0"/>
+        <text x="34" y="44" font-size="28" fill="white" text-anchor="middle" dominant-baseline="middle" font-family="serif" font-weight="bold">M</text>
+        <circle cx="27" cy="15" r="4" fill="white"/>
+        <circle cx="41" cy="15" r="4" fill="white"/>
+        <text x="34" y="63" font-size="9" fill="#c8f0ff" text-anchor="middle" font-family="monospace">${code}</text>
+      </svg>`;
+
+    case 'Toei':
+      return `<svg viewBox="0 0 68 68" class="op-logo">
+        <rect width="68" height="68" rx="5" fill="#00a04a"/>
+        <path d="M34,57 L-6,43 A42,42 0 0,1 74,43 Z" fill="white"/>
+        <rect x="28" y="10" width="12" height="47" fill="#00a04a"/>
+        <rect x="32" y="55" width="4" height="12" fill="white"/>
+        <text x="34" y="10" font-size="9" fill="#c8ffc8" text-anchor="middle" font-family="monospace">${code}</text>
+      </svg>`;
+
+    case 'Tokyu':
+      return `<svg viewBox="0 0 68 68" class="op-logo">
+        <rect width="68" height="68" rx="5" fill="#e60012"/>
+        <polygon points="${star}" fill="white"/>
+      </svg>`;
+
+    case 'Tobu':
+      return `<svg viewBox="0 0 68 68" class="op-logo">
+        <rect width="68" height="68" rx="5" fill="#004190"/>
+        <text x="34" y="38" font-size="16" fill="white" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-weight="bold">TOBU</text>
+      </svg>`;
+
+    case 'Seibu':
+      return `<svg viewBox="0 0 68 68" class="op-logo">
+        <rect width="68" height="68" rx="4" fill="white"/>
+        <ellipse cx="26" cy="34" rx="22" ry="22" fill="#0071bc"/>
+        <ellipse cx="42" cy="34" rx="22" ry="22" fill="#00aadc"/>
+        <text x="34" y="38" font-size="22" fill="white" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-weight="bold">S</text>
+      </svg>`;
+
+    case 'Odakyu':
+      return `<svg viewBox="0 0 68 68" class="op-logo">
+        <rect width="68" height="68" rx="5" fill="#00adef"/>
+        <ellipse cx="40" cy="34" rx="17" ry="17" fill="white"/>
+        <polygon points="25,34 12,21 12,47" fill="white"/>
+      </svg>`;
+
+    case 'Keio':
+      return `<svg viewBox="0 0 68 68" class="op-logo">
+        <rect width="68" height="68" rx="5" fill="#001f62"/>
+        <text x="34" y="38" font-size="18" fill="white" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-weight="bold">KEIO</text>
+      </svg>`;
+
+    case 'Keikyu':
+      return `<svg viewBox="0 0 68 68" class="op-logo">
+        <rect width="68" height="68" rx="5" fill="#d3002f"/>
+        <text x="34" y="38" font-size="22" fill="white" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-weight="bold">KQ</text>
+      </svg>`;
+
+    case 'Keisei':
+      return `<svg viewBox="0 0 68 68" class="op-logo">
+        <rect width="68" height="68" rx="5" fill="${color}"/>
+        <text x="34" y="38" font-size="18" fill="${textColor}" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-weight="bold">${code}</text>
+      </svg>`;
+
+    default: {
+      const br = '5';
+      const fs = code.length > 2 ? '18' : '24';
+      return `<svg viewBox="0 0 68 68" class="op-logo">
+        <rect width="68" height="68" rx="${br}" fill="${color}"/>
+        <text x="34" y="38" font-size="${fs}" fill="${textColor}" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-weight="bold">${code}</text>
+      </svg>`;
+    }
+  }
+}
+
+function carDiagramHTML(code, color) {
+  const n = CARS[code] || 8;
+  const blocks = Array.from({length: n}, () =>
+    `<span class="car-block" style="background:${color}"></span>`
+  ).join('');
+  return `<span class="car-diagram">${blocks}<span class="car-count">${n}c</span></span>`;
+}
+
+function destJaPrefix(destKey) {
+  const ja = DEST_JA[destKey.replace(/^→\s*/, '').trim().toUpperCase()];
+  return ja ? `<span class="dest-ja">${ja}</span>` : '';
+}
+
+// ── App ────────────────────────────────────────────────────────────────────────
 const app = (() => {
   let ws = null;
   let wsRetry = null;
-  let mode = 'station';          // 'station' | 'line'
+  let mode = 'station';
   let currentStation = 'shibuya';
   let currentLine = 'JY';
-  let currentPlatform = 'ALL';   // 'ALL' or platform label string
+  let currentPlatform = 'ALL';
   let allStations = [];
   let allLines = [];
-  let tickInterval = null;
   let clockInterval = null;
-  let refreshTimeout = null;
 
-  // ── Init ────────────────────────────────────────────────────────────────
+  // ── Init ─────────────────────────────────────────────────────────────────────
 
   async function init() {
     startClock();
@@ -52,26 +220,19 @@ const app = (() => {
     }
   }
 
-  // ── WebSocket ───────────────────────────────────────────────────────────
+  // ── WebSocket ─────────────────────────────────────────────────────────────────
 
   function connectWS() {
     if (ws) { try { ws.close(); } catch (_) {} }
     ws = new WebSocket(WS_URL);
 
-    ws.onopen = () => {
-      setDevStatus('WS connected');
-      refresh();
-    };
+    ws.onopen = () => { setDevStatus('WS connected'); refresh(); };
 
     ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data);
-      if (msg.type === 'tick') {
-        refresh();
-      } else if (msg.type === 'station_update') {
-        renderStationBoard(msg.station_id, msg.trains);
-      } else if (msg.type === 'line_update') {
-        renderLineTracker(msg.line_code, msg.trains);
-      }
+      if (msg.type === 'tick') refresh();
+      else if (msg.type === 'station_update') renderStationBoard(msg.station_id, msg.trains);
+      else if (msg.type === 'line_update') renderLineTracker(msg.line_code, msg.trains);
     };
 
     ws.onclose = () => {
@@ -83,53 +244,41 @@ const app = (() => {
   }
 
   function wsSend(msg) {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(msg));
-    } else {
-      // Fallback: REST poll
-      restRefresh();
-    }
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+    else restRefresh();
   }
 
   function refresh() {
-    if (mode === 'station') {
-      wsSend({ mode: 'station', station_id: currentStation });
-    } else {
-      wsSend({ mode: 'line', line_code: currentLine });
-    }
+    if (mode === 'station') wsSend({ mode: 'station', station_id: currentStation });
+    else wsSend({ mode: 'line', line_code: currentLine });
   }
 
   async function restRefresh() {
     if (mode === 'station') {
-      const res = await fetch(`${API}/api/trains/station/${currentStation}`);
-      const trains = await res.json();
+      const trains = await fetch(`${API}/api/trains/station/${currentStation}`).then(r => r.json());
       renderStationBoard(currentStation, trains);
     } else {
-      const res = await fetch(`${API}/api/trains/line/${currentLine}`);
-      const trains = await res.json();
+      const trains = await fetch(`${API}/api/trains/line/${currentLine}`).then(r => r.json());
       renderLineTracker(currentLine, trains);
     }
   }
 
-  // ── Data loading ────────────────────────────────────────────────────────
+  // ── Data loading ──────────────────────────────────────────────────────────────
 
   async function loadLines() {
-    const res = await fetch(`${API}/api/lines`);
-    allLines = await res.json();
+    allLines = await fetch(`${API}/api/lines`).then(r => r.json());
   }
 
   async function loadStations() {
-    const res = await fetch(`${API}/api/stations`);
-    allStations = await res.json();
+    allStations = await fetch(`${API}/api/stations`).then(r => r.json());
   }
 
-  // ── Mode switching ──────────────────────────────────────────────────────
+  // ── Mode switching ────────────────────────────────────────────────────────────
 
   function setMode(m, skipPicker = false) {
     mode = m;
     document.querySelectorAll('.mode-view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    // Close any open overlays
     closeStationPicker();
     closeLinePicker();
 
@@ -141,8 +290,6 @@ const app = (() => {
     } else {
       document.getElementById('line-tracker').classList.add('active');
       document.getElementById('btn-line').classList.add('active');
-      const strip = document.getElementById('platform-strip');
-      if (strip) strip.classList.add('hidden');
       const devRow = document.getElementById('dev-line-row');
       if (devRow) devRow.style.display = 'flex';
       if (!skipPicker) openLinePicker();
@@ -166,7 +313,6 @@ const app = (() => {
 
   function selectPlatform(plt) {
     currentPlatform = plt;
-    // Full re-render so hero card also updates to the right platform's next train
     refresh();
   }
 
@@ -177,36 +323,47 @@ const app = (() => {
     if (mode === 'line') refresh();
   }
 
-  // ── Hero card ── renders the next train prominently ────────────────────
+  // ── Hero card ─────────────────────────────────────────────────────────────────
 
   function renderHeroCard(train) {
+    const badgeWrap = document.getElementById('next-badge-wrap');
     if (!train) {
-      document.getElementById('next-badge').textContent = '?';
-      document.getElementById('next-badge').style.cssText = 'background:#1a1a1a;border-radius:4px;';
-      document.getElementById('next-line-name').textContent = '';
-      document.getElementById('next-dest').textContent = 'NO SERVICE';
+      badgeWrap.innerHTML = `<svg viewBox="0 0 68 68" class="op-logo">
+        <rect width="68" height="68" rx="5" fill="#1a1a1a"/>
+        <text x="34" y="38" font-size="24" fill="#333" text-anchor="middle" dominant-baseline="middle" font-family="monospace">?</text>
+      </svg>`;
+      document.getElementById('next-line-name').innerHTML = '';
+      document.getElementById('next-dest').innerHTML = 'NO SERVICE';
+      document.getElementById('next-dest').style.cssText = 'color:#333';
       document.getElementById('next-eta').textContent = '–';
+      document.getElementById('next-eta').style.cssText = '';
       document.getElementById('next-delay').textContent = '';
       document.getElementById('next-platform').textContent = '';
       return;
     }
-    const line = allLines.find(l => l.code === train.line_code) || train;
-    const shape = train.shape || line.shape || 'rect';
-    const borderRadius = shape === 'circle' ? '50%' : shape === 'square' ? '4px' : '8px';
-    const glow = `0 0 18px ${train.color}99, 0 0 36px ${train.color}44`;
 
-    const badge = document.getElementById('next-badge');
-    badge.textContent = train.line_code;
-    badge.style.cssText = `background:${train.color};color:${train.text_color};border-radius:${borderRadius};box-shadow:${glow};`;
-
-    document.getElementById('next-line-name').textContent = line.name || line.short || '';
-
-    const destEl = document.getElementById('next-dest');
+    const line = allLines.find(l => l.code === train.line_code) || {};
+    const operator = line.operator || '';
     const bright = brighten(train.color);
-    destEl.textContent = `→ ${train.destination}`;
+
+    // Operator logo
+    badgeWrap.innerHTML = operatorLogoHTML(operator, train.line_code, train.color, train.text_color);
+
+    // Line name row: kanji + english + car diagram (right-aligned)
+    const lineJa = LINE_NAME_JA[train.line_code] || '';
+    const lineName = (line.name || line.short || train.line_code).toUpperCase();
+    const jaHtml = lineJa ? `<span class="line-name-ja">${lineJa}</span>` : '';
+    document.getElementById('next-line-name').innerHTML =
+      `${jaHtml}<span class="line-name-en">${lineName}</span>${carDiagramHTML(train.line_code, train.color)}`;
+
+    // Destination with kanji
+    const destKey = train.destination.toUpperCase();
+    const destEl = document.getElementById('next-dest');
+    destEl.innerHTML = `${destJaPrefix(destKey)}<span>→ ${train.destination}</span>`;
     destEl.style.color = bright;
     destEl.style.textShadow = `0 0 10px ${train.color}99, 0 0 20px ${train.color}44`;
 
+    // ETA
     const eta = train.eta_min;
     const etaEl = document.getElementById('next-eta');
     if (eta <= 1) {
@@ -218,55 +375,40 @@ const app = (() => {
       etaEl.classList.remove('eta-arriving');
       etaEl.textContent = `${eta} MIN`;
       etaEl.style.color = eta <= 4 ? '#ffd700' : '#9acd32';
-      etaEl.style.textShadow = eta <= 4
-        ? '0 0 10px #ffd70099'
-        : '0 0 8px #9acd3266';
+      etaEl.style.textShadow = eta <= 4 ? '0 0 10px #ffd70099' : '0 0 8px #9acd3266';
     }
 
-    const delayEl = document.getElementById('next-delay');
-    delayEl.textContent = train.delay_min > 0 ? `+${train.delay_min}m delay` : '';
-
+    document.getElementById('next-delay').textContent =
+      train.delay_min > 0 ? `+${train.delay_min}m delay` : '';
     document.getElementById('next-platform').textContent =
-      train.platform ? `PLATFORM ${train.platform}` : '';
+      train.platform ? `PLT ${train.platform}` : '';
   }
 
-  // ── Platform filter strip ───────────────────────────────────────────────
+  // ── Platform filter strip ─────────────────────────────────────────────────────
 
   function renderPlatformStrip(trains) {
     const strip = document.getElementById('platform-strip');
     const buttons = document.getElementById('platform-buttons');
 
-    // Collect unique platform labels, sorted numerically then alpha
     const seen = new Set();
-    trains.forEach(t => { if (t.platform && t.platform !== '–') seen.add(t.platform); });
+    trains.forEach(t => { if (t.platform && t.platform !== '–') seen.add(String(t.platform)); });
     const platforms = [...seen].sort((a, b) => {
       const na = parseFloat(a), nb = parseFloat(b);
       if (!isNaN(na) && !isNaN(nb)) return na - nb;
       return a.localeCompare(b);
     });
 
-    if (platforms.length <= 1) {
-      // Nothing useful to filter — hide strip
-      strip.classList.add('hidden');
-      return;
-    }
-
+    if (platforms.length <= 1) { strip.classList.add('hidden'); return; }
     strip.classList.remove('hidden');
 
-    // Ensure currentPlatform is still valid; reset if the data no longer has it
-    if (currentPlatform !== 'ALL' && !platforms.includes(currentPlatform)) {
-      currentPlatform = 'ALL';
-    }
+    if (currentPlatform !== 'ALL' && !platforms.includes(currentPlatform)) currentPlatform = 'ALL';
 
-    buttons.innerHTML = [
-      `<button class="plt-btn all-btn ${currentPlatform === 'ALL' ? 'active' : ''}" data-plt="ALL" onclick="app.selectPlatform('ALL')">ALL</button>`,
-      ...platforms.map(p =>
-        `<button class="plt-btn ${currentPlatform === p ? 'active' : ''}" data-plt="${p}" onclick="app.selectPlatform('${p}')">${p}</button>`
-      )
-    ].join('');
+    buttons.innerHTML = ['ALL', ...platforms].map(p =>
+      `<button class="plt-btn ${currentPlatform === p ? 'active' : ''}" onclick="app.selectPlatform('${p}')">${p}</button>`
+    ).join('');
   }
 
-  // ── Station board renderer ──────────────────────────────────────────────
+  // ── Station board ─────────────────────────────────────────────────────────────
 
   function renderStationBoard(stationId, trains) {
     const list = document.getElementById('train-list');
@@ -282,21 +424,14 @@ const app = (() => {
     }
     noTrains.classList.add('hidden');
 
-    // Filter by platform if active, then pick hero from filtered set
     const visible = currentPlatform === 'ALL'
       ? trains
-      : trains.filter(t => (t.platform || '–') === currentPlatform);
+      : trains.filter(t => String(t.platform || '–') === currentPlatform);
 
-    // Hero card — always the next train (respects platform filter)
     renderHeroCard(visible[0] || trains[0]);
-
-    // Update platform strip
     renderPlatformStrip(trains);
 
-    // Upcoming list — skip the very first train (it's in the hero card)
     const upcoming = visible.slice(1);
-
-    // Time buckets for section dividers (in minutes)
     const BUCKETS = [
       { max: 2,  label: 'ARRIVING' },
       { max: 10, label: 'NEXT 10 MIN' },
@@ -312,33 +447,29 @@ const app = (() => {
     upcoming.forEach(t => {
       const eta = t.eta_min;
       const bucketIdx = BUCKETS.findIndex(b => eta <= b.max);
-      const bucket = bucketIdx >= 0 ? BUCKETS[bucketIdx] : null;
 
-      if (bucket && bucketIdx !== lastBucket) {
+      if (bucketIdx >= 0 && bucketIdx !== lastBucket) {
         html += `<div class="time-divider">
-          <span class="time-divider-label">${bucket.label}</span>
+          <span class="time-divider-label">${BUCKETS[bucketIdx].label}</span>
           <span class="time-divider-line"></span>
         </div>`;
         lastBucket = bucketIdx;
       }
 
       const line = allLines.find(l => l.code === t.line_code) || t;
-      let timeClass = 'normal';
-      let timeText = `${eta}`;
-      if (eta <= 2) { timeClass = 'arriving'; timeText = eta <= 1 ? 'NOW' : `${eta}`; }
-      else if (eta <= 5) { timeClass = 'soon'; }
-
-      const dest = truncate(t.destination, 11);
-      const plat = t.platform || '–';
-      const delayDot = t.delay_min > 0 ? `<span class="delay-dot" title="${t.delay_min}m delay"></span>` : '';
+      const timeClass = eta <= 2 ? 'arriving' : eta <= 5 ? 'soon' : 'normal';
+      const timeText = eta <= 1 ? 'NOW' : String(eta);
+      const plat = String(t.platform || '–');
       const badgeShape = t.shape || line.shape || 'rect';
+      const delayDot = t.delay_min > 0 ? `<span class="delay-dot"></span>` : '';
+      const jaPrefix = destJaPrefix(t.destination);
 
-      html += `<div class="board-row train-row" data-platform="${plat}">
+      html += `<div class="board-row train-row" style="border-left:3px solid ${t.color}">
         <span class="col-line">
           <span class="inline-badge shape-${badgeShape}" style="background:${t.color};color:${t.text_color}">${t.line_code}</span>
         </span>
-        <span class="col-dest" style="color:${brighten(t.color)}">${dest}${delayDot}</span>
-        <span class="col-plat" style="font-size:8px;color:#555">${plat}</span>
+        <span class="col-dest" style="color:${brighten(t.color)}">${jaPrefix}${truncate(t.destination, 11)}${delayDot}</span>
+        <span class="col-plat">${plat}</span>
         <span class="col-time"><span class="time-val ${timeClass}">${timeText}</span></span>
       </div>`;
     });
@@ -346,12 +477,12 @@ const app = (() => {
     list.innerHTML = html;
 
     if (upcoming.length === 0 && currentPlatform !== 'ALL') {
-      noTrains.textContent = `No more trains\non platform ${currentPlatform}`;
+      noTrains.textContent = `No more trains on platform ${currentPlatform}`;
       noTrains.classList.remove('hidden');
     }
   }
 
-  // ── Line tracker renderer ───────────────────────────────────────────────
+  // ── Line tracker ──────────────────────────────────────────────────────────────
 
   function renderLineTracker(lineCode, trains) {
     const line = allLines.find(l => l.code === lineCode);
@@ -360,8 +491,14 @@ const app = (() => {
     const nameEl = document.getElementById('tracker-line-name');
     const shape = line.shape || 'rect';
     const br = shape === 'circle' ? '50%' : shape === 'square' ? '2px' : '4px';
+    const lineJa = LINE_NAME_JA[lineCode] || '';
+    const jaHtml = lineJa
+      ? `<span style="font-family:'Noto Sans JP',sans-serif;font-size:9px;color:#8b6c2a;margin-right:4px">${lineJa}</span>`
+      : '';
+
     nameEl.innerHTML = `
       <span style="background:${line.color};color:${line.text_color};font-family:'Press Start 2P',monospace;font-size:7px;padding:2px 4px;border-radius:${br};box-shadow:0 0 8px ${line.color}88">${lineCode}</span>
+      ${jaHtml}
       <span style="font-family:'Press Start 2P',monospace;font-size:7px;color:${line.color};text-shadow:0 0 8px ${line.color}66">${line.short.toUpperCase()}</span>
       <span style="font-size:8px;color:#333;margin-left:auto;font-family:'Share Tech Mono',monospace">${trains.length} trains</span>
     `;
@@ -374,11 +511,13 @@ const app = (() => {
 
     container.innerHTML = trains.slice(0, 12).map(t => {
       const delayStr = t.delay_min > 0 ? `<span class="tracker-delay">+${t.delay_min}min</span>` : '';
+      const destKey = (t.destination || '').toUpperCase();
+      const jaSpan = DEST_JA[destKey] ? `<span class="tracker-dest-ja">${DEST_JA[destKey]}</span>` : '';
       const progress = buildProgressBar(t, line);
       return `<div class="tracker-train">
         <div class="tracker-train-header">
           <span class="tracker-train-num">#${t.train_number}</span>
-          <span class="tracker-dest" style="color:${brighten(t.color)}">&rarr; ${t.destination}</span>
+          <span class="tracker-dest" style="color:${brighten(t.color)}">${jaSpan}&rarr; ${t.destination}</span>
           ${delayStr}
         </div>
         ${progress}
@@ -390,16 +529,6 @@ const app = (() => {
     const from = train.from_station || '';
     const to = train.to_station || '';
     if (!from && !to) return '';
-
-    // Show: [from] ──●──> [to] ──> [destination]
-    const segments = [
-      { label: truncate(from, 7), type: 'passed' },
-      { label: '▶', type: 'current-marker' },
-      { label: truncate(to, 7), type: 'next' },
-      { label: '···', type: 'gap' },
-      { label: truncate(train.destination, 7), type: 'dest' },
-    ];
-
     return `<div class="station-progress">
       <span class="prog-station current" style="color:${brighten(line.color)}">${truncate(from, 7)}</span>
       <span class="prog-line passed" style="background:${line.color}40"></span>
@@ -411,7 +540,7 @@ const app = (() => {
     </div>`;
   }
 
-  // ── Station picker ──────────────────────────────────────────────────────
+  // ── Station picker ────────────────────────────────────────────────────────────
 
   function openStationPicker() {
     const overlay = document.getElementById('station-picker');
@@ -420,11 +549,8 @@ const app = (() => {
     input.value = '';
     renderStationResults('');
     setTimeout(() => input.focus(), 50);
-
     input.oninput = () => renderStationResults(input.value);
-    input.onkeydown = (e) => {
-      if (e.key === 'Escape') closeStationPicker();
-    };
+    input.onkeydown = e => { if (e.key === 'Escape') closeStationPicker(); };
   }
 
   function closeStationPicker() {
@@ -437,8 +563,7 @@ const app = (() => {
       !q || s.name_en.toLowerCase().includes(q) || s.name_ja.includes(q)
     ).slice(0, 20);
 
-    const container = document.getElementById('station-results');
-    container.innerHTML = results.map(s => {
+    document.getElementById('station-results').innerHTML = results.map(s => {
       const badges = s.lines.map(lc => {
         const l = allLines.find(x => x.code === lc);
         if (!l) return '';
@@ -452,20 +577,13 @@ const app = (() => {
     }).join('');
   }
 
-  function _pickStation(id) {
-    closeStationPicker();
-    selectStation(id);
-    setMode('station');
-  }
+  function _pickStation(id) { closeStationPicker(); selectStation(id); setMode('station'); }
 
-  // ── Line picker ──────────────────────────────────────────────────────────
+  // ── Line picker ───────────────────────────────────────────────────────────────
 
   function openLinePicker() {
-    const overlay = document.getElementById('line-picker');
-    overlay.classList.remove('hidden');
-
-    const container = document.getElementById('line-results');
-    container.innerHTML = allLines.map(l =>
+    document.getElementById('line-picker').classList.remove('hidden');
+    document.getElementById('line-results').innerHTML = allLines.map(l =>
       `<div class="line-picker-item" onclick="app._pickLine('${l.code}')">
         <span class="line-badge shape-${l.shape}" style="background:${l.color};color:${l.text_color};font-size:9px;height:16px;min-width:22px">${l.code}</span>
         <span class="lp-code">${truncate(l.short, 8)}</span>
@@ -473,17 +591,10 @@ const app = (() => {
     ).join('');
   }
 
-  function closeLinePicker() {
-    document.getElementById('line-picker').classList.add('hidden');
-  }
+  function closeLinePicker() { document.getElementById('line-picker').classList.add('hidden'); }
+  function _pickLine(code) { closeLinePicker(); selectLine(code); setMode('line', true); }
 
-  function _pickLine(code) {
-    closeLinePicker();
-    selectLine(code);
-    setMode('line', true);  // skip auto-opening picker again
-  }
-
-  // ── Dev controls ────────────────────────────────────────────────────────
+  // ── Dev controls ──────────────────────────────────────────────────────────────
 
   function buildDevControls() {
     const stSel = document.getElementById('dev-station-select');
@@ -493,7 +604,6 @@ const app = (() => {
       ).join('');
       stSel.value = currentStation;
     }
-
     const lineSel = document.getElementById('dev-line-select');
     if (lineSel) {
       lineSel.innerHTML = allLines.map(l =>
@@ -508,7 +618,7 @@ const app = (() => {
     if (el) el.textContent = msg;
   }
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────────────
 
   function truncate(str, n) {
     if (!str) return '';
@@ -517,20 +627,16 @@ const app = (() => {
   }
 
   function brighten(hex) {
-    // Lighten a hex color for dark background readability
     if (!hex || !hex.startsWith('#')) return hex;
-    let r = parseInt(hex.slice(1, 3), 16);
-    let g = parseInt(hex.slice(3, 5), 16);
-    let b = parseInt(hex.slice(5, 7), 16);
-    // Boost luminance
-    const factor = 1.4;
-    r = Math.min(255, Math.round(r * factor + 40));
-    g = Math.min(255, Math.round(g * factor + 40));
-    b = Math.min(255, Math.round(b * factor + 40));
+    let r = parseInt(hex.slice(1,3), 16);
+    let g = parseInt(hex.slice(3,5), 16);
+    let b = parseInt(hex.slice(5,7), 16);
+    r = Math.min(255, Math.round(r * 1.4 + 40));
+    g = Math.min(255, Math.round(g * 1.4 + 40));
+    b = Math.min(255, Math.round(b * 1.4 + 40));
     return `rgb(${r},${g},${b})`;
   }
 
-  // Public API
   return { init, setMode, selectStation, selectLine, selectPlatform, openStationPicker, openLinePicker, _pickStation, _pickLine };
 })();
 

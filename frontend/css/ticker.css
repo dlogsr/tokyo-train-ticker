@@ -130,15 +130,12 @@ html, body {
   position: relative;
 }
 
-/* Dot grid overlay on the badge — makes it look like lit LEDs */
-#next-badge::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle, rgba(0,0,0,0.25) 1px, transparent 1px);
-  background-size: 3.5px 3.5px;
-  border-radius: inherit;
-  pointer-events: none;
+/* Operator logo SVG (replaces the plain #next-badge) */
+.op-logo {
+  width: 78px;
+  height: 78px;
+  display: block;
+  flex-shrink: 0;
 }
 
 /* Right column — train info */
@@ -158,6 +155,47 @@ html, body {
   color: #555;
   letter-spacing: 0.5px;
   text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.line-name-ja {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 9px;
+  color: #82691f;
+  flex-shrink: 0;
+}
+
+.line-name-en {
+  font-size: 9px;
+  color: #3a3a3a;
+  flex-shrink: 0;
+}
+
+/* Car formation diagram */
+.car-diagram {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.car-block {
+  display: inline-block;
+  width: 6px;
+  height: 8px;
+  border-radius: 1px;
+  opacity: 0.85;
+}
+
+.car-count {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 7px;
+  color: #2a2a2a;
+  margin-left: 2px;
 }
 
 #next-dest {
@@ -167,7 +205,25 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  /* color + text-shadow set inline via JS (line color + glow) */
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+/* Kanji destination prefix in hero card */
+.dest-ja {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 11px;
+  color: #967830;
+  flex-shrink: 0;
+}
+
+/* Kanji destination prefix in list rows */
+.dest-ja-row {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 9px;
+  color: #6b521a;
+  margin-right: 2px;
 }
 
 #next-eta-row {
@@ -284,8 +340,9 @@ html, body {
   display: flex;
   align-items: center;
   height: 17px;
-  padding: 0 4px;
+  padding: 0 4px 0 2px;
   border-bottom: 1px solid #0e0e0e;
+  /* border-left color set inline by JS */
 }
 
 .train-row { cursor: default; }
@@ -298,6 +355,16 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+}
+
+/* tracker kanji dest */
+.tracker-dest-ja {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 9px;
+  color: #7a5c1a;
+  margin-right: 3px;
 }
 
 .col-time .time-val {
