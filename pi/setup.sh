@@ -26,7 +26,7 @@ sudo chown "$USER:$USER" "$INSTALL_DIR"
 cp -r "$(dirname "$0")/../" "$INSTALL_DIR/"
 cd "$INSTALL_DIR"
 
-python3 -m venv venv
+python3 -m venv --clear venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r backend/requirements.txt
