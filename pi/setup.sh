@@ -15,6 +15,7 @@ sudo apt-get install -y --no-install-recommends \
   python3-pygame \
   git curl wget \
   libopenblas-dev libopenjp2-7 libtiff6 \
+  python3-pil python3-numpy \
   fonts-noto-cjk \
   fbset
 
