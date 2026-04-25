@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=320, initial-scale=1.0">
+  <title>Tokyo Train Ticker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/ticker.css">
+</head>
+<body>
+  <!-- ── Root 320×240 frame ── -->
+  <div id="screen">
+
+    <!-- Header bar -->
+    <div id="header">
+      <div id="header-left">
+        <span id="station-ja" class="station-ja"></span>
+        <span id="station-en" class="station-en">TOKYO TRAIN TICKER</span>
+      </div>
+      <div id="header-right">
+        <span id="clock">00:00:00</span>
+      </div>
+    </div>
+
+    <!-- Line badge strip (station mode) -->
+    <div id="line-badges"></div>
+
+    <!-- Main content area -->
+    <div id="content">
+
+      <!-- Station mode board -->
+      <div id="station-board" class="mode-view active">
+        <div id="board-header" class="board-row board-head">
+          <span class="col-line">LINE</span>
+          <span class="col-dest">DESTINATION</span>
+          <span class="col-plat">PLT</span>
+          <span class="col-time">MIN</span>
+        </div>
+        <div id="train-list"></div>
+        <div id="no-trains" class="hidden">No service data</div>
+      </div>
+
+      <!-- Line tracker mode -->
+      <div id="line-tracker" class="mode-view">
+        <div id="tracker-line-name"></div>
+        <div id="tracker-trains"></div>
+      </div>
+
+      <!-- Station picker overlay -->
+      <div id="station-picker" class="overlay hidden">
+        <div class="overlay-title">SELECT STATION</div>
+        <input id="station-search" type="text" placeholder="Type station name..." autocomplete="off" spellcheck="false">
+        <div id="station-results"></div>
+      </div>
+
+      <!-- Line picker overlay -->
+      <div id="line-picker" class="overlay hidden">
+        <div class="overlay-title">SELECT LINE</div>
+        <div id="line-results"></div>
+      </div>
+
+    </div>
+
+    <!-- Footer nav -->
+    <div id="footer">
+      <button class="nav-btn active" id="btn-station" onclick="app.setMode('station')">
+        <span class="btn-icon">⬡</span> STATION
+      </button>
+      <button class="nav-btn" id="btn-line" onclick="app.setMode('line')">
+        <span class="btn-icon">⟶</span> LINE
+      </button>
+      <button class="nav-btn" id="btn-pick-station" onclick="app.openStationPicker()">
+        <span class="btn-icon">⊕</span> STN
+      </button>
+      <div id="demo-badge" class="demo-badge hidden">DEMO</div>
+    </div>
+
+  </div>
+
+  <!-- Outside the 320×240 frame: dev controls (hidden on Pi) -->
+  <div id="dev-controls" class="dev-only">
+    <div class="dev-label">LOCAL SIMULATION · 320×240</div>
+    <div class="dev-row">
+      <span>Station:</span>
+      <select id="dev-station-select" onchange="app.selectStation(this.value)"></select>
+    </div>
+    <div class="dev-row">
+      <span>Mode:</span>
+      <button onclick="app.setMode('station')">Station Board</button>
+      <button onclick="app.setMode('line')">Line Tracker</button>
+    </div>
+    <div class="dev-row" id="dev-line-row" style="display:none">
+      <span>Line:</span>
+      <select id="dev-line-select" onchange="app.selectLine(this.value)"></select>
+    </div>
+    <div class="dev-row">
+      <span>Status:</span>
+      <span id="dev-status">Connecting...</span>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

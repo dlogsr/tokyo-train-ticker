@@ -1,0 +1,17 @@
+services:
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ODPT_API_KEY=${ODPT_API_KEY:-}
+    volumes:
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+    restart: unless-stopped
+
+  # Optional: open the browser automatically on macOS
+  # browser:
+  #   image: zenika/alpine-chrome
+  #   network_mode: host
+  #   command: --no-sandbox --window-size=320,240 http://localhost:8000
