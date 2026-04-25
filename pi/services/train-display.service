@@ -1,0 +1,18 @@
+[Unit]
+Description=Tokyo Train Ticker Display
+After=train-backend.service
+Requires=train-backend.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/dlogsr/tokyo-train-ticker/pi
+Environment=API_BASE=http://localhost:8000
+Environment=FB_DEV=/dev/fb0
+ExecStartPre=/bin/sleep 4
+ExecStart=/usr/bin/python3 pygame_display.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

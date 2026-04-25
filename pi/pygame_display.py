@@ -1,79 +1,149 @@
 """
-Pygame renderer for Adafruit PiTFT 2.8" (320x240) on Raspberry Pi Zero.
-Connects to the local FastAPI backend and renders directly to the framebuffer.
+Tokyo Train Ticker — framebuffer display for Adafruit PiTFT 2.8" (320x240)
+Uses Pillow + direct /dev/fb0 writes. No SDL/X11/Wayland needed.
 
-Usage:
-  On Pi:  SDL_FBDEV=/dev/fb1 SDL_VIDEODRIVER=fbcon python3 pygame_display.py
-  On dev: python3 pygame_display.py  (opens a 320x240 window)
+Run: sudo python3 pi/pygame_display.py
 """
-import asyncio
-import json
 import os
 import sys
 import time
 import threading
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+import signal
+import struct
 
-import pygame
-import httpx
-import websockets
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    import numpy as np
+except ImportError:
+    print("Missing deps: sudo apt install -y python3-pil python3-numpy")
+    sys.exit(1)
 
-# ── Config ──────────────────────────────────────────────────────────────────
+try:
+    import httpx
+except ImportError:
+    print("Missing httpx: sudo pip3 install --break-system-packages httpx")
+    sys.exit(1)
+
+# ── Config ────────────────────────────────────────────────────────────────────
 SCREEN_W, SCREEN_H = 320, 240
-API_BASE = os.getenv("API_BASE", "http://localhost:8000")
-WS_URL   = os.getenv("WS_URL",  "ws://localhost:8000/ws")
-JST = timezone(timedelta(hours=9))
-IS_PI = os.path.exists("/dev/fb1")
+API_BASE  = os.getenv("API_BASE", "http://localhost:8000")
+FB_DEV    = os.getenv("FB_DEV",   "/dev/fb0")
+FPS       = 8
 
-# Colors
-C_BG      = (8,   8,   8)
-C_HEADER  = (13,  13,  13)
-C_BORDER  = (26,  26,  26)
-C_DIM     = (60,  60,  60)
-C_TEXT    = (220, 220, 220)
-C_YELLOW  = (255, 215, 0)
-C_GREEN   = (154, 205, 50)
-C_ORANGE  = (255, 107, 53)
+# ── Layout constants ──────────────────────────────────────────────────────────
+HDR_H    = 22          # header height
+HERO_TOP = HDR_H       # hero card top y
+HERO_BOT = HERO_TOP + 95   # hero card bottom y (117)
+FOOTER_H = 24          # footer height
+FOOTER_Y = SCREEN_H - FOOTER_H   # footer top y (216)
+STRIP_H  = 18          # platform strip height
+COL_H    = 15          # column header height
+ROW_H    = 20          # train list row height
 
-# ── Fonts (will be loaded after pygame.init) ─────────────────────────────────
-fonts: dict = {}
+# ── Colors (RGB tuples) ───────────────────────────────────────────────────────
+BLACK   = (0,   0,   0)
+WHITE   = (220, 220, 220)
+DIM     = (55,  55,  55)
+DARK    = (18,  18,  18)
+ORANGE  = (255, 107, 53)
+YELLOW  = (255, 215, 0)
+GREEN   = (154, 205, 50)
+BORDER  = (28,  28,  28)
 
-def load_fonts():
-    pygame.font.init()
-    mono = pygame.font.match_font("sharetechmono,couriernew,courier,monospace")
-    fonts["sm"]  = pygame.font.Font(mono, 9)
-    fonts["md"]  = pygame.font.Font(mono, 11)
-    fonts["lg"]  = pygame.font.Font(mono, 13)
-    fonts["xl"]  = pygame.font.Font(mono, 16)
+# ── Framebuffer ───────────────────────────────────────────────────────────────
+def _fb_bpp():
+    try:
+        return int(open("/sys/class/graphics/fb0/bits_per_pixel").read().strip())
+    except Exception:
+        return 16
+
+def _img_to_bytes(img: Image.Image) -> bytes:
+    bpp = _fb_bpp()
+    if bpp == 32:
+        return img.convert("RGBA").tobytes()
+    arr = np.array(img.convert("RGB"), dtype=np.uint16)
+    r = (arr[:,:,0] >> 3).astype(np.uint16)
+    g = (arr[:,:,1] >> 2).astype(np.uint16)
+    b = (arr[:,:,2] >> 3).astype(np.uint16)
+    rgb565 = (r << 11) | (g << 5) | b
+    return rgb565.tobytes()
+
+_fb = None
+def _open_fb():
+    global _fb
+    try:
+        _fb = open(FB_DEV, "wb")
+    except PermissionError:
+        print(f"Cannot open {FB_DEV} — run with sudo")
+        sys.exit(1)
+    for tty in ("/dev/tty1", "/dev/tty"):
+        try:
+            with open(tty, "wb") as t:
+                t.write(b"\033[?25l\033[2J")
+            break
+        except Exception:
+            pass
+
+def flush(img: Image.Image):
+    if _fb is None:
+        return
+    try:
+        _fb.seek(0)
+        _fb.write(_img_to_bytes(img))
+        _fb.flush()
+    except Exception as e:
+        print(f"fb write error: {e}")
+
+# ── Fonts ─────────────────────────────────────────────────────────────────────
+FONT_PATHS = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+    "/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf",
+    "/usr/share/fonts/truetype/freefont/FreeMono.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationMono-Bold.ttf",
+]
+
+def _load_font(size):
+    for p in FONT_PATHS:
+        if os.path.exists(p):
+            try:
+                return ImageFont.truetype(p, size)
+            except Exception:
+                continue
+    return ImageFont.load_default()
+
+fonts = {}
+def get_font(key):
+    if key not in fonts:
+        sizes = {"xs": 10, "sm": 12, "md": 14, "lg": 18, "xl": 24, "hero": 30}
+        fonts[key] = _load_font(sizes.get(key, 12))
+    return fonts[key]
 
 # ── State ─────────────────────────────────────────────────────────────────────
 state = {
-    "mode": "station",           # "station" | "line"
-    "station_id": "shibuya",
-    "station_en": "SHIBUYA",
-    "station_ja": "渋谷",
-    "line_code": "JY",
+    "mode":           "station",
+    "station_id":     "shibuya",
+    "station_en":     "SHIBUYA",
+    "station_ja":     "渋谷",
+    "line_code":      "JY",
     "station_trains": [],
-    "line_trains": [],
-    "all_stations": [],
-    "all_lines": [],
-    "demo_mode": True,
-    "connected": False,
-    "last_update": 0,
-    "platform_filter": "ALL",   # "ALL" or specific platform label
-    "picker_open": False,
-    "picker_type": None,        # "station" | "line" | "platform"
+    "line_trains":    [],
+    "all_stations":   [],
+    "all_lines":      [],
+    "demo_mode":      True,
+    "connected":      False,
+    "last_update":    0,
+    "platform_filter":"ALL",
+    "picker_open":    False,
+    "picker_type":    None,
     "picker_results": [],
-    "picker_scroll": 0,
-    "picker_query": "",
+    "picker_scroll":  0,
 }
 
-# ── REST data fetch (runs in background thread) ───────────────────────────────
-
-def fetch_blocking(url: str) -> Optional[dict | list]:
+# ── Data fetching ─────────────────────────────────────────────────────────────
+def fetch(url):
     try:
-        with httpx.Client(timeout=5.0) as c:
+        with httpx.Client(timeout=6.0) as c:
             r = c.get(url)
             r.raise_for_status()
             return r.json()
@@ -82,23 +152,23 @@ def fetch_blocking(url: str) -> Optional[dict | list]:
 
 def refresh_data():
     if state["mode"] == "station":
-        data = fetch_blocking(f"{API_BASE}/api/trains/station/{state['station_id']}")
+        data = fetch(f"{API_BASE}/api/trains/station/{state['station_id']}")
         if data is not None:
             state["station_trains"] = data
             state["last_update"] = time.time()
     else:
-        data = fetch_blocking(f"{API_BASE}/api/trains/line/{state['line_code']}")
+        data = fetch(f"{API_BASE}/api/trains/line/{state['line_code']}")
         if data is not None:
             state["line_trains"] = data
             state["last_update"] = time.time()
 
 def load_meta():
-    lines = fetch_blocking(f"{API_BASE}/api/lines")
-    if lines: state["all_lines"] = lines
-    stations = fetch_blocking(f"{API_BASE}/api/stations")
+    lines    = fetch(f"{API_BASE}/api/lines")
+    stations = fetch(f"{API_BASE}/api/stations")
+    status   = fetch(f"{API_BASE}/api/status")
+    if lines:    state["all_lines"]    = lines
     if stations: state["all_stations"] = stations
-    status = fetch_blocking(f"{API_BASE}/api/status")
-    if status: state["demo_mode"] = status.get("demo_mode", True)
+    if status:   state["demo_mode"]    = status.get("demo_mode", True)
     state["connected"] = bool(lines)
 
 def background_loop():
@@ -108,447 +178,577 @@ def background_loop():
         time.sleep(15)
 
 # ── Drawing helpers ────────────────────────────────────────────────────────────
-
-def hex_to_rgb(h: str) -> tuple:
+def hex_to_rgb(h):
     h = h.lstrip("#")
     return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
 
-def brighten(rgb: tuple, factor: float = 1.4, add: int = 40) -> tuple:
-    return tuple(min(255, int(c * factor + add)) for c in rgb)
+def brighten(rgb, f=1.4, add=40):
+    return tuple(min(255, int(c * f + add)) for c in rgb)
 
-def draw_badge(surf, x, y, code: str, color: str, text_color: str, shape: str, font):
-    bg = hex_to_rgb(color)
-    fg = hex_to_rgb(text_color)
-    tw, th = font.size(code)
-    w = max(tw + 4, 14 if shape == "circle" else 18)
-    h = 12
-    rect = pygame.Rect(x, y, w, h)
+def text_w(draw, text, font):
+    bb = draw.textbbox((0,0), text, font=font)
+    return bb[2] - bb[0]
+
+def draw_text(draw, x, y, text, font, color=WHITE, max_w=None):
+    if max_w:
+        while text and text_w(draw, text, font) > max_w:
+            text = text[:-2] + "…"
+    draw.text((x, y), text, font=font, fill=color)
+
+def draw_badge(draw, x, y, code, color, text_color, shape, size=13):
+    f = get_font("xs")
+    tw = text_w(draw, code, f)
+    w  = max(tw + 6, size)
+    h  = size
+    rgb_bg = hex_to_rgb(color)
+    rgb_fg = hex_to_rgb(text_color)
+    rect = [x, y, x + w, y + h]
     if shape == "circle":
-        cx, cy = rect.centerx, rect.centery
-        r = h // 2
-        pygame.draw.circle(surf, bg, (cx, cy), r)
+        cx, cy, r = x + w//2, y + h//2, h//2
+        draw.ellipse([cx-r, cy-r, cx+r, cy+r], fill=rgb_bg)
     elif shape == "square":
-        pygame.draw.rect(surf, bg, rect, border_radius=1)
+        draw.rectangle(rect, fill=rgb_bg)
     else:
-        pygame.draw.rect(surf, bg, rect, border_radius=3)
-    txt = font.render(code, True, fg)
-    surf.blit(txt, (rect.centerx - tw // 2, rect.centery - th // 2))
+        draw.rounded_rectangle(rect, radius=2, fill=rgb_bg)
+    draw.text((x + (w - tw)//2, y + (h - f.size)//2), code, font=f, fill=rgb_fg)
     return w
 
-def draw_text(surf, text, x, y, font, color=C_TEXT, max_w=None):
-    if max_w:
-        while font.size(text)[0] > max_w and len(text) > 1:
-            text = text[:-2] + "…"
-    rendered = font.render(str(text), True, color)
-    surf.blit(rendered, (x, y))
-    return rendered.get_width()
+def dot_grid_overlay(img):
+    arr = np.array(img)
+    for y in range(0, SCREEN_H, 4):
+        for x in range(0, SCREEN_W, 4):
+            arr[y, x] = np.clip(arr[y, x].astype(int) - 15, 0, 255)
+    return Image.fromarray(arr.astype(np.uint8))
 
-# ── Screen sections ────────────────────────────────────────────────────────────
+# ── Screen sections ───────────────────────────────────────────────────────────
+def draw_header(draw):
+    draw.rectangle([0, 0, SCREEN_W, HDR_H], fill=(8, 8, 8))
+    draw.line([0, HDR_H, SCREEN_W, HDR_H], fill=BORDER)
+    f_ja = get_font("xs")
+    f_en = get_font("sm")
+    ja = state["station_ja"]
+    en = state["station_en"]
+    draw.text((4, 5), ja, font=f_ja, fill=(80, 80, 80))
+    x = 4 + text_w(draw, ja, f_ja) + 5
+    draw_text(draw, x, 4, en, f_en, WHITE, max_w=185)
+    from datetime import datetime, timezone, timedelta
+    JST = timezone(timedelta(hours=9))
+    clk = datetime.now(JST).strftime("%H:%M:%S")
+    cw = text_w(draw, clk, f_ja)
+    draw.text((SCREEN_W - cw - 4, 6), clk, font=f_ja, fill=(70, 70, 70))
 
-def draw_header(surf):
-    pygame.draw.rect(surf, C_HEADER, (0, 0, SCREEN_W, 22))
-    pygame.draw.line(surf, C_BORDER, (0, 22), (SCREEN_W, 22))
+def draw_hero_card(draw):
+    trains  = state["station_trains"]
+    pf      = state["platform_filter"]
+    visible = [t for t in trains if pf == "ALL" or str(t.get("platform","")) == pf]
+    train   = visible[0] if visible else None
 
-    # Station name
-    draw_text(surf, state["station_ja"], 4, 5, fonts["sm"], (100, 100, 100))
-    en_x = 4 + fonts["sm"].size(state["station_ja"])[0] + 4
-    draw_text(surf, state["station_en"], en_x, 4, fonts["md"], C_TEXT, max_w=200)
+    draw.rectangle([0, HERO_TOP, SCREEN_W, HERO_BOT], fill=(5, 5, 5))
+    draw.line([0, HERO_BOT, SCREEN_W, HERO_BOT], fill=BORDER)
 
-    # Clock (JST)
-    now = datetime.now(JST)
-    clock_str = now.strftime("%H:%M:%S")
-    cw = fonts["sm"].size(clock_str)[0]
-    draw_text(surf, clock_str, SCREEN_W - cw - 4, 6, fonts["sm"], C_DIM)
-
-def draw_line_badges(surf, y=22):
-    pygame.draw.rect(surf, (6, 6, 6), (0, y, SCREEN_W, 18))
-    pygame.draw.line(surf, C_BORDER, (0, y + 18), (SCREEN_W, y + 18))
-    station = next((s for s in state["all_stations"] if s["id"] == state["station_id"]), None)
-    if not station:
+    if not train:
+        draw.text((10, HERO_TOP + 36), "NO SERVICE DATA", font=get_font("sm"), fill=DIM)
         return
-    x = 4
-    for lc in station.get("lines", []):
-        line = next((l for l in state["all_lines"] if l["code"] == lc), None)
-        if not line:
-            continue
-        w = draw_badge(surf, x, y + 3, lc, line["color"], line["text_color"], line["shape"], fonts["sm"])
-        x += w + 3
-        if x > SCREEN_W - 20:
-            break
 
-def _get_platforms(trains: list) -> list:
+    color   = hex_to_rgb(train.get("color", "#888888"))
+    bright  = brighten(color)
+    shape   = train.get("shape", "rect")
+
+    badge_size = 70
+    bx = (100 - badge_size) // 2
+    by = HERO_TOP + (95 - badge_size) // 2
+    code   = train["line_code"]
+    rgb_bg = color
+    rgb_fg = hex_to_rgb(train.get("text_color", "#000000"))
+    brect  = [bx, by, bx + badge_size, by + badge_size]
+    if shape == "circle":
+        draw.ellipse(brect, fill=rgb_bg)
+    elif shape == "square":
+        draw.rounded_rectangle(brect, radius=4, fill=rgb_bg)
+    else:
+        draw.rounded_rectangle(brect, radius=10, fill=rgb_bg)
+    f_big = get_font("xl")
+    tw = text_w(draw, code, f_big)
+    draw.text((bx + (badge_size - tw)//2, by + (badge_size - f_big.size)//2),
+              code, font=f_big, fill=rgb_fg)
+
+    rx = 104
+    line_obj  = next((l for l in state["all_lines"] if l["code"] == code), {})
+    line_name = line_obj.get("name", code)
+    draw.text((rx, HERO_TOP + 4), line_name.upper(), font=get_font("xs"), fill=DIM)
+
+    dest = ("→ " + train.get("destination", "")).upper()
+    draw_text(draw, rx, HERO_TOP + 18, dest, get_font("md"), bright, max_w=210)
+
+    eta = train.get("eta_min", 0)
+    if eta <= 1:
+        eta_str, eta_color = "NOW", ORANGE
+        if int(time.time() * 2) % 2 == 0:
+            eta_color = (120, 50, 20)
+    elif eta <= 4:
+        eta_str, eta_color = f"{eta} MIN", YELLOW
+    else:
+        eta_str, eta_color = f"{eta} MIN", GREEN
+
+    draw.text((rx, HERO_TOP + 38), eta_str, font=get_font("hero"), fill=eta_color)
+
+    if train.get("delay_min", 0) > 0:
+        draw.text((rx, HERO_TOP + 76), f"+{train['delay_min']}m delay",
+                  font=get_font("xs"), fill=(230, 120, 34))
+    plt = train.get("platform", "")
+    if plt:
+        draw.text((rx + 100, HERO_TOP + 76), f"PLT {plt}",
+                  font=get_font("xs"), fill=(60, 60, 60))
+
+def draw_platform_strip(draw) -> int:
+    """Returns y-bottom of strip (used as top_y for upcoming list)."""
+    trains = state["station_trains"]
     seen = set()
     for t in trains:
-        p = str(t.get("platform") or "").strip()
+        p = str(t.get("platform","")).strip()
         if p and p != "–":
             seen.add(p)
-    try:
-        return sorted(seen, key=lambda x: (float(x), x))
-    except Exception:
-        return sorted(seen)
+    platforms = sorted(seen, key=lambda v: (float(v) if v.replace(".","").isdigit() else 999, v))
 
-
-def draw_platform_strip(surf, trains, y=40):
-    platforms = _get_platforms(trains)
     if len(platforms) <= 1:
-        return y  # nothing to show
+        return HERO_BOT
 
-    pygame.draw.rect(surf, (6, 6, 6), (0, y, SCREEN_W, 16))
-    pygame.draw.line(surf, C_BORDER, (0, y + 16), (SCREEN_W, y + 16))
-    draw_text(surf, "PLT", 4, y + 4, fonts["sm"], (60, 60, 60))
+    y = HERO_BOT
+    draw.rectangle([0, y, SCREEN_W, y + STRIP_H], fill=(6, 6, 6))
+    draw.line([0, y + STRIP_H, SCREEN_W, y + STRIP_H], fill=BORDER)
 
-    x = 28
+    f  = get_font("xs")
+    draw.text((4, y + 4), "PLT", font=f, fill=(40, 40, 40))
+    x  = 34
     pf = state["platform_filter"]
     for label in ["ALL"] + platforms:
         active = (label == pf)
-        tw, th = fonts["sm"].size(label)
-        bw = tw + 6
-        brect = pygame.Rect(x, y + 2, bw, 12)
-        bg = (26, 26, 26) if active else (8, 8, 8)
-        border = (100, 100, 100) if active else (36, 36, 36)
-        fg = C_TEXT if active else (80, 80, 80)
-        pygame.draw.rect(surf, bg, brect, border_radius=2)
-        pygame.draw.rect(surf, border, brect, 1, border_radius=2)
-        draw_text(surf, label, brect.centerx - tw // 2, brect.centery - th // 2, fonts["sm"], fg)
-        x += bw + 3
-        if x > SCREEN_W - 10:
-            break
-
-    return y + 16
-
-
-def draw_station_board(surf):
-    draw_line_badges(surf, y=22)
-
-    trains = state["station_trains"]
-
-    # Platform filter strip (returns next y position)
-    content_y = draw_platform_strip(surf, trains, y=40)
-
-    # Apply platform filter
-    pf = state["platform_filter"]
-    visible_trains = [t for t in trains if pf == "ALL" or str(t.get("platform", "")) == pf]
-
-    # Column headers
-    hdr_y = content_y
-    pygame.draw.rect(surf, (14, 14, 14), (0, hdr_y, SCREEN_W, 14))
-    draw_text(surf, "LINE", 4, hdr_y + 2, fonts["sm"], C_DIM)
-    draw_text(surf, "DESTINATION", 34, hdr_y + 2, fonts["sm"], C_DIM)
-    draw_text(surf, "PLT", 246, hdr_y + 2, fonts["sm"], C_DIM)
-    draw_text(surf, "MIN", 291, hdr_y + 2, fonts["sm"], C_DIM)
-    pygame.draw.line(surf, C_BORDER, (0, hdr_y + 14), (SCREEN_W, hdr_y + 14))
-
-    row_y = hdr_y + 15
-    row_h = 18
-
-    if not visible_trains:
-        msg = f"No trains on platform {pf}" if pf != "ALL" else "No service data"
-        draw_text(surf, msg, SCREEN_W // 2 - 50, row_y + 20, fonts["sm"], C_DIM)
-        return
-
-    for i, t in enumerate(visible_trains):
-        if row_y + row_h > SCREEN_H - 20:
-            break
-        line = next((l for l in state["all_lines"] if l["code"] == t["line_code"]), None)
-        bg = (11, 11, 11) if i % 2 == 0 else C_BG
-        pygame.draw.rect(surf, bg, (0, row_y, SCREEN_W, row_h))
-
-        if line:
-            draw_badge(surf, 3, row_y + 3, t["line_code"], t["color"], t["text_color"], t.get("shape", "rect"), fonts["sm"])
-
-        dest = (t.get("destination") or "").upper()[:11]
-        color = brighten(hex_to_rgb(t.get("color", "#ffffff")))
-        draw_text(surf, dest, 34, row_y + 4, fonts["sm"], color, max_w=200)
-
-        if t.get("delay_min", 0) > 0:
-            pygame.draw.circle(surf, (238, 136, 51), (240, row_y + 9), 3)
-
-        plat = str(t.get("platform") or "–")
-        draw_text(surf, plat, 253, row_y + 4, fonts["sm"], C_DIM)
-
-        eta = t.get("eta_min", 0)
-        if eta <= 1:
-            eta_color = C_ORANGE if int(time.time() * 2) % 2 == 0 else (100, 50, 20)
-            eta_str = "NOW"
-        elif eta <= 3:
-            eta_color = C_YELLOW
-            eta_str = str(eta)
+        tw     = text_w(draw, label, f) + 8
+        brect  = [x, y+2, x+tw, y+STRIP_H-2]
+        if active:
+            draw.rounded_rectangle(brect, radius=2, fill=(25, 25, 25))
+            draw.rounded_rectangle(brect, radius=2, outline=(100, 100, 100))
+            draw.text((x+4, y+4), label, font=f, fill=WHITE)
         else:
-            eta_color = C_GREEN
-            eta_str = str(eta)
-        ew = fonts["md"].size(eta_str)[0]
-        draw_text(surf, eta_str, SCREEN_W - ew - 4, row_y + 3, fonts["md"], eta_color)
-
-        pygame.draw.line(surf, C_BORDER, (0, row_y + row_h - 1), (SCREEN_W, row_y + row_h - 1))
-        row_y += row_h
-
-def draw_line_tracker(surf):
-    # Line name header
-    pygame.draw.rect(surf, C_HEADER, (0, 22, SCREEN_W, 20))
-    pygame.draw.line(surf, C_BORDER, (0, 42), (SCREEN_W, 42))
-    line = next((l for l in state["all_lines"] if l["code"] == state["line_code"]), None)
-    if line:
-        x = 6
-        w = draw_badge(surf, x, 27, state["line_code"], line["color"], line["text_color"], line["shape"], fonts["sm"])
-        x += w + 6
-        color = brighten(hex_to_rgb(line["color"]))
-        draw_text(surf, line["name"].upper(), x, 27, fonts["sm"], color, max_w=180)
-        count_str = f"{len(state['line_trains'])} TRAINS"
-        cw = fonts["sm"].size(count_str)[0]
-        draw_text(surf, count_str, SCREEN_W - cw - 4, 28, fonts["sm"], C_DIM)
-
-    trains = state["line_trains"]
-    row_y = 44
-    row_h = 32
-    for t in trains[:6]:
-        if row_y + row_h > SCREEN_H - 20:
+            draw.rounded_rectangle(brect, radius=2, outline=(30, 30, 30))
+            draw.text((x+4, y+4), label, font=f, fill=DIM)
+        x += tw + 4
+        if x > SCREEN_W - 12:
             break
-        pygame.draw.rect(surf, (10, 10, 10) if (row_y // row_h) % 2 == 0 else C_BG, (0, row_y, SCREEN_W, row_h))
-        pygame.draw.line(surf, C_BORDER, (0, row_y + row_h - 1), (SCREEN_W, row_y + row_h - 1))
+    return y + STRIP_H
 
-        # Train number
-        draw_text(surf, f"#{t.get('train_number','')}", 4, row_y + 2, fonts["sm"], C_DIM)
+def draw_upcoming_list(draw, top_y):
+    trains  = state["station_trains"]
+    pf      = state["platform_filter"]
+    visible = [t for t in trains if pf == "ALL" or str(t.get("platform","")) == pf]
+    upcoming = visible[1:]
 
-        # Destination
-        dest = (t.get("destination") or "").upper()
-        lcolor = brighten(hex_to_rgb(t.get("color", "#ffffff")))
-        draw_text(surf, f"→ {dest}", 4, row_y + 13, fonts["sm"], lcolor, max_w=SCREEN_W - 60)
+    h_y = top_y
+    draw.rectangle([0, h_y, SCREEN_W, h_y + COL_H], fill=(10, 10, 10))
+    draw.line([0, h_y + COL_H, SCREEN_W, h_y + COL_H], fill=BORDER)
+    f_hdr = get_font("xs")
+    draw.text((4,   h_y+3), "LINE",        font=f_hdr, fill=(45,45,45))
+    draw.text((36,  h_y+3), "NEXT TRAINS", font=f_hdr, fill=(45,45,45))
+    draw.text((248, h_y+3), "PLT",         font=f_hdr, fill=(45,45,45))
+    draw.text((289, h_y+3), "MIN",         font=f_hdr, fill=(45,45,45))
 
-        # Delay
+    row_y  = h_y + COL_H + 1
+    f_sm   = get_font("sm")
+    f_xs   = get_font("xs")
+    BUCKETS = [
+        (2,  "ARRIVING"),
+        (10, "NEXT 10 MIN"),
+        (20, "20 MIN"),
+        (30, "30 MIN"),
+        (45, "45 MIN"),
+        (60, "1 HOUR"),
+    ]
+    last_bucket = -1
+
+    for t in upcoming:
+        if row_y >= FOOTER_Y:
+            break
+        eta  = t.get("eta_min", 0)
+        bidx = next((i for i, (m, _) in enumerate(BUCKETS) if eta <= m), -1)
+        if bidx >= 0 and bidx != last_bucket:
+            lbl = BUCKETS[bidx][1]
+            draw.rectangle([0, row_y, SCREEN_W, row_y+12], fill=BLACK)
+            draw.text((4, row_y+1), lbl, font=f_xs, fill=(35,35,35))
+            lx = 4 + text_w(draw, lbl, f_xs) + 4
+            draw.line([lx, row_y+6, SCREEN_W-4, row_y+6], fill=(20,20,20))
+            last_bucket = bidx
+            row_y += 12
+            if row_y >= FOOTER_Y:
+                break
+
+        bg = (10,10,10) if (upcoming.index(t) % 2 == 0) else BLACK
+        draw.rectangle([0, row_y, SCREEN_W, row_y+ROW_H], fill=bg)
+
+        color  = hex_to_rgb(t.get("color", "#888"))
+        bright = brighten(color)
+        code   = t["line_code"]
+        plat   = str(t.get("platform") or "–")
+
+        draw_badge(draw, 3, row_y+4, code, t.get("color","#888"),
+                   t.get("text_color","#fff"), t.get("shape","rect"), size=13)
+
+        dest = t.get("destination","").upper()[:11]
+        draw_text(draw, 36, row_y+4, dest, f_xs, bright, max_w=202)
+
         if t.get("delay_min", 0) > 0:
-            ds = f"+{t['delay_min']}min"
-            dw = fonts["sm"].size(ds)[0]
-            draw_text(surf, ds, SCREEN_W - dw - 4, row_y + 2, fonts["sm"], C_ORANGE)
+            draw.ellipse([242, row_y+6, 247, row_y+11], fill=(230,120,34))
 
-        # Progress bar: from → ● → to → ··· dest
-        from_st = (t.get("from_station") or "").upper()[:7]
-        to_st   = (t.get("to_station") or "").upper()[:7]
-        line_rgb = hex_to_rgb(t.get("color", "#555555"))
-        bar_y = row_y + 23
-        fw = fonts["sm"].size(from_st)[0]
-        draw_text(surf, from_st, 4, bar_y, fonts["sm"], (80, 80, 80))
-        x = 4 + fw + 3
-        pygame.draw.line(surf, (50, 50, 50), (x, bar_y + 4), (x + 15, bar_y + 4))
-        x += 17
-        pygame.draw.circle(surf, line_rgb, (x, bar_y + 4), 4)
-        x += 7
-        pygame.draw.line(surf, (40, 40, 40), (x, bar_y + 4), (x + 15, bar_y + 4))
-        x += 17
-        draw_text(surf, to_st, x, bar_y, fonts["sm"], (130, 130, 130))
+        draw.text((252, row_y+4), plat, font=f_xs, fill=(60,60,60))
+
+        if eta <= 1:
+            etxt, ecol = "NOW", ORANGE
+            if int(time.time()*2)%2 == 0: ecol = (100,40,15)
+        elif eta <= 4:
+            etxt, ecol = str(eta), YELLOW
+        else:
+            etxt, ecol = str(eta), GREEN
+        ew = text_w(draw, etxt, f_sm)
+        draw.text((SCREEN_W - ew - 4, row_y+3), etxt, font=f_sm, fill=ecol)
+
+        draw.line([0, row_y+ROW_H-1, SCREEN_W, row_y+ROW_H-1], fill=BORDER)
+        row_y += ROW_H
+
+def draw_line_tracker(draw):
+    trains   = state["line_trains"]
+    line_obj = next((l for l in state["all_lines"] if l["code"] == state["line_code"]), {})
+    color    = hex_to_rgb(line_obj.get("color", "#888"))
+    bright   = brighten(color)
+    shape    = line_obj.get("shape", "rect")
+
+    draw.rectangle([0, HERO_TOP, SCREEN_W, HERO_TOP+24], fill=(8,8,8))
+    draw.line([0, HERO_TOP+24, SCREEN_W, HERO_TOP+24], fill=BORDER)
+    bw = draw_badge(draw, 4, HERO_TOP+5, state["line_code"],
+                    line_obj.get("color","#888"), line_obj.get("text_color","#fff"),
+                    shape, size=16)
+    draw.text((10 + bw, HERO_TOP+7), line_obj.get("name","").upper(),
+              font=get_font("sm"), fill=bright)
+    cnt = f"{len(trains)} trains"
+    cw = text_w(draw, cnt, get_font("xs"))
+    draw.text((SCREEN_W - cw - 4, HERO_TOP+8), cnt, font=get_font("xs"), fill=DIM)
+
+    row_y = HERO_TOP + 26
+    row_h = 34
+    f_xs  = get_font("xs")
+    f_sm  = get_font("sm")
+    for t in trains[:5]:
+        if row_y + row_h > FOOTER_Y:
+            break
+        bg = (10,10,10) if trains.index(t)%2==0 else BLACK
+        draw.rectangle([0, row_y, SCREEN_W, row_y+row_h], fill=bg)
+        draw.line([0, row_y+row_h-1, SCREEN_W, row_y+row_h-1], fill=BORDER)
+
+        draw.text((4, row_y+2), f"#{t.get('train_number','')}", font=f_xs, fill=DIM)
+
+        dest = ("→ " + t.get("destination","")).upper()
+        draw_text(draw, 4, row_y+14, dest, f_xs, bright, max_w=250)
+
+        if t.get("delay_min",0) > 0:
+            ds = f"+{t['delay_min']}m"
+            dw = text_w(draw, ds, f_xs)
+            draw.text((SCREEN_W-dw-4, row_y+2), ds, font=f_xs, fill=ORANGE)
+
+        from_s = t.get("from_station","").upper()[:7]
+        to_s   = t.get("to_station","").upper()[:7]
+        px = 4
+        py = row_y + 26
+        draw.text((px, py), from_s, font=f_xs, fill=(70,70,70))
+        px += text_w(draw, from_s, f_xs) + 3
+        draw.line([px, py+4, px+12, py+4], fill=(50,50,50))
+        px += 14
+        draw.ellipse([px-3, py+1, px+3, py+7], fill=color)
+        px += 7
+        draw.line([px, py+4, px+12, py+4], fill=(40,40,40))
+        px += 14
+        draw.text((px, py), to_s, font=f_xs, fill=(110,110,110))
 
         row_y += row_h
 
-def draw_footer(surf):
-    y = SCREEN_H - 20
-    pygame.draw.rect(surf, (10, 10, 10), (0, y, SCREEN_W, 20))
-    pygame.draw.line(surf, C_BORDER, (0, y), (SCREEN_W, y))
-
-    buttons = [
-        ("STATION", "station"),
-        ("LINE", "line"),
-        ("PICK", "pick"),
-    ]
-    bw, bh = 64, 14
-    x = 4
-    for label, action in buttons:
-        active = (action == state["mode"]) or (action == "pick")
-        bg = (20, 20, 20) if active else C_BG
-        fg = C_TEXT if active else C_DIM
-        border = (80, 80, 80) if active else C_BORDER
-        brect = pygame.Rect(x, y + 3, bw, bh)
-        pygame.draw.rect(surf, bg, brect, border_radius=2)
-        pygame.draw.rect(surf, border, brect, 1, border_radius=2)
-        tw = fonts["sm"].size(label)[0]
-        draw_text(surf, label, brect.centerx - tw // 2, brect.centery - fonts["sm"].get_height() // 2, fonts["sm"], fg)
-        x += bw + 4
-
-    if state["demo_mode"]:
-        draw_text(surf, "DEMO", SCREEN_W - 35, y + 5, fonts["sm"], (80, 80, 40))
-
-def draw_picker(surf):
-    # Semi-opaque overlay
-    overlay = pygame.Surface((SCREEN_W, SCREEN_H - 40), pygame.SRCALPHA)
-    overlay.fill((8, 8, 8, 245))
-    surf.blit(overlay, (0, 22))
-
-    pygame.draw.line(surf, C_BORDER, (0, 32), (SCREEN_W, 32))
+def draw_picker(draw):
+    draw.rectangle([0, HERO_TOP, SCREEN_W, FOOTER_Y], fill=(4,4,4))
+    draw.line([0, HERO_TOP+13, SCREEN_W, HERO_TOP+13], fill=BORDER)
     title = "SELECT STATION" if state["picker_type"] == "station" else "SELECT LINE"
-    draw_text(surf, title, 4, 24, fonts["sm"], C_DIM)
+    draw.text((4, HERO_TOP+2), title, font=get_font("xs"), fill=(60,60,60))
 
     results = state["picker_results"]
-    row_y = 42
-    row_h = 18 if state["picker_type"] == "station" else 30
+    scroll  = state["picker_scroll"]
+    f_sm    = get_font("sm")
+    f_xs    = get_font("xs")
+    list_top = HERO_TOP + 14
 
-    for i, item in enumerate(results[state["picker_scroll"]:state["picker_scroll"] + 10]):
-        if row_y + row_h > SCREEN_H - 20:
-            break
-        bg = (20, 20, 20) if i % 2 == 0 else (12, 12, 12)
-        pygame.draw.rect(surf, bg, (0, row_y, SCREEN_W, row_h))
-        if state["picker_type"] == "station":
-            draw_text(surf, item["name_en"].upper(), 4, row_y + 4, fonts["sm"], C_TEXT, max_w=160)
-            draw_text(surf, item["name_ja"], 4, row_y + row_h - 11, fonts["sm"], (80, 80, 80))
+    if state["picker_type"] == "station":
+        row_h = 24
+        row_y = list_top
+        for item in results[scroll:scroll+8]:
+            if row_y + row_h > FOOTER_Y:
+                break
+            bg = (12,12,12) if results.index(item)%2==0 else (8,8,8)
+            draw.rectangle([0, row_y, SCREEN_W, row_y+row_h], fill=bg)
+            draw_text(draw, 4, row_y+3, item["name_en"].upper(), f_sm, WHITE, max_w=140)
+            draw.text((4, row_y+14), item.get("name_ja",""), font=f_xs, fill=(70,70,70))
             bx = 190
-            for lc in item.get("lines", [])[:5]:
-                l = next((x for x in state["all_lines"] if x["code"] == lc), None)
-                if l:
-                    w = draw_badge(surf, bx, row_y + 3, lc, l["color"], l["text_color"], l["shape"], fonts["sm"])
-                    bx += w + 2
+            for lc in item.get("lines",[])[:6]:
+                lo = next((l for l in state["all_lines"] if l["code"]==lc), None)
+                if lo:
+                    bw = draw_badge(draw, bx, row_y+5, lc,
+                                    lo["color"], lo["text_color"], lo["shape"], 13)
+                    bx += bw + 2
+            draw.line([0, row_y+row_h-1, SCREEN_W, row_y+row_h-1], fill=BORDER)
+            row_y += row_h
+    else:
+        cols, col_w = 3, SCREEN_W // 3
+        row_y = list_top
+        row_h = 36
+        for i, item in enumerate(results[scroll:scroll+12]):
+            col = i % cols
+            rx  = col * col_w + 3
+            if col == 0 and i > 0:
+                row_y += row_h
+            if row_y + row_h > FOOTER_Y:
+                break
+            bg = (12,12,12) if i%2==0 else (8,8,8)
+            draw.rectangle([rx, row_y, rx+col_w-3, row_y+row_h-2], fill=bg)
+            bw = draw_badge(draw, rx+4, row_y+5, item["code"],
+                            item["color"], item["text_color"], item["shape"], 18)
+            short = item.get("short", item["code"])[:7]
+            draw_text(draw, rx+4, row_y+26, short, f_xs, DIM, max_w=col_w-8)
+
+FOOTER_BUTTONS = [("STN", "station"), ("LINE", "line"), ("PICK", "pick")]
+FOOTER_BW = SCREEN_W // len(FOOTER_BUTTONS)
+
+def draw_footer(draw):
+    draw.rectangle([0, FOOTER_Y, SCREEN_W, SCREEN_H], fill=(8,8,8))
+    draw.line([0, FOOTER_Y, SCREEN_W, FOOTER_Y], fill=BORDER)
+    f = get_font("sm")
+    for i, (label, action) in enumerate(FOOTER_BUTTONS):
+        bx     = i * FOOTER_BW
+        active = (action == state["mode"])
+        brect  = [bx + 2, FOOTER_Y + 3, bx + FOOTER_BW - 2, SCREEN_H - 2]
+        if active:
+            draw.rounded_rectangle(brect, radius=2, fill=(20,20,20))
+            draw.rounded_rectangle(brect, radius=2, outline=(80,80,80))
+            draw.text((bx + (FOOTER_BW - text_w(draw, label, f)) // 2, FOOTER_Y + 6),
+                      label, font=f, fill=WHITE)
         else:
-            l = item
-            draw_badge(surf, 4, row_y + 7, l["code"], l["color"], l["text_color"], l["shape"], fonts["md"])
-            draw_text(surf, l["name"].upper(), 28, row_y + 8, fonts["sm"], brighten(hex_to_rgb(l["color"])), max_w=250)
+            draw.rounded_rectangle(brect, radius=2, outline=(25,25,25))
+            draw.text((bx + (FOOTER_BW - text_w(draw, label, f)) // 2, FOOTER_Y + 6),
+                      label, font=f, fill=DIM)
+    if state["demo_mode"]:
+        draw.text((SCREEN_W - 34, FOOTER_Y + 7), "DEMO",
+                  font=get_font("xs"), fill=(50,40,10))
 
-        pygame.draw.line(surf, C_BORDER, (0, row_y + row_h - 1), (SCREEN_W, row_y + row_h - 1))
-        row_y += row_h
+# ── Touch input ───────────────────────────────────────────────────────────────
+_EV_FMT  = "llHHi"
+_EV_SIZE = struct.calcsize(_EV_FMT)
 
-# ── Touch / keyboard input handling ─────────────────────────────────────────
+_TOUCH_KEYWORDS = ("touch", "ads", "stmpe", "ft5", "ft6", "goodix", "edt-ft", "ili")
 
-def handle_touch(pos, surf_size):
-    x, y = pos
-    footer_y = SCREEN_H - 20
-    if y >= footer_y:
-        bw = 64
-        btn_x = 4
-        for action in ["station", "line", "pick"]:
-            if btn_x <= x <= btn_x + bw:
-                if action == "station":
-                    state["mode"] = "station"
-                    state["platform_filter"] = "ALL"
-                    state["picker_open"] = False
-                    threading.Thread(target=refresh_data, daemon=True).start()
-                elif action == "line":
-                    open_picker("line")
-                elif action == "pick":
-                    open_picker("station")
-                return
-            btn_x += bw + 4
+def find_touch_device():
+    base = "/sys/class/input"
+    try:
+        for d in sorted(os.listdir(base)):
+            name_file = os.path.join(base, d, "device", "name")
+            if os.path.exists(name_file):
+                n = open(name_file).read().strip().lower()
+                if any(k in n for k in _TOUCH_KEYWORDS):
+                    ev_dir = os.path.join(base, d)
+                    for sub in sorted(os.listdir(ev_dir)):
+                        if sub.startswith("event"):
+                            dev = f"/dev/input/{sub}"
+                            print(f"Touch device: {dev!r}  ({n})")
+                            return dev
+    except Exception:
+        pass
+    print("No touch device found — check /proc/bus/input/devices")
+    return None
+
+_touch_x_max = SCREEN_W - 1
+_touch_y_max = SCREEN_H - 1
+
+def _read_abs_max(event_dev, axis_code):
+    try:
+        name = os.path.basename(event_dev)
+        line = open(f"/sys/class/input/{name}/device/abs{axis_code:02x}").read().strip().split()
+        return int(line[2])
+    except Exception:
+        return None
+
+def handle_touch_events(q):
+    global _touch_x_max, _touch_y_max
+    import select
+
+    dev = None
+    for attempt in range(15):
+        dev = find_touch_device()
+        if dev:
+            break
+        print(f"Touch not ready, retry {attempt+1}/15 in 3s...")
+        time.sleep(3)
+    if not dev:
+        print("Touch disabled — device never appeared")
         return
 
-    # Platform strip tap (y 40-56 when strip is visible)
-    if state["mode"] == "station" and not state["picker_open"]:
-        trains = state["station_trains"]
-        platforms = _get_platforms(trains)
-        if len(platforms) > 1 and 40 <= y <= 56:
-            all_labels = ["ALL"] + platforms
-            # Reconstruct button x positions to find which was tapped
-            cx = 28
-            for label in all_labels:
-                try:
-                    tw = pygame.font.Font(None, 9).size(label)[0] + 6
-                except Exception:
-                    tw = len(label) * 6 + 6
-                if cx <= x <= cx + tw:
-                    state["platform_filter"] = label
-                    return
-                cx += tw + 3
-            return
+    try:
+        f = open(dev, "rb")
+    except Exception as e:
+        print(f"Cannot open touch device {dev}: {e}")
+        return
+
+    mx = _read_abs_max(dev, 0)
+    my = _read_abs_max(dev, 1)
+    if mx and mx > 0: _touch_x_max = mx
+    if my and my > 0: _touch_y_max = my
+    print(f"Touch axis range: x=0-{_touch_x_max}  y=0-{_touch_y_max}  event_size={_EV_SIZE}")
+
+    EV_ABS, EV_KEY = 3, 1
+    ABS_X,  ABS_Y  = 0, 1
+    ABS_MT_POSITION_X, ABS_MT_POSITION_Y = 53, 54
+    BTN_TOUCH = 330
+
+    def scale(v, vmax, smax):
+        return round(v * (smax - 1) / vmax) if vmax != smax - 1 else v
+
+    x = y = 0
+    finger_down = False
+
+    while True:
+        try:
+            r, _, _ = select.select([f], [], [], 1.0)
+            if not r:
+                continue
+            raw = f.read(_EV_SIZE)
+            if len(raw) < _EV_SIZE:
+                continue
+            _, _, etype, ecode, evalue = struct.unpack(_EV_FMT, raw)
+
+            if etype == EV_ABS:
+                if ecode in (ABS_X, ABS_MT_POSITION_X):
+                    x = evalue
+                elif ecode in (ABS_Y, ABS_MT_POSITION_Y):
+                    y = evalue
+                # ABS_MT_TRACKING_ID intentionally ignored — BTN_TOUCH is authoritative
+
+            elif etype == EV_KEY and ecode == BTN_TOUCH:
+                if evalue:
+                    finger_down = True
+                elif finger_down:
+                    # Finger lifted — emit tap with last known position
+                    finger_down = False
+                    q.put((scale(x, _touch_x_max, SCREEN_W),
+                           scale(y, _touch_y_max, SCREEN_H)))
+
+        except Exception as e:
+            print(f"Touch read error: {e}")
+            time.sleep(0.1)
+
+import queue as _queue
+_touch_q = _queue.Queue()
+
+def process_touch(x, y):
+    if y >= FOOTER_Y:
+        idx = x // FOOTER_BW
+        if 0 <= idx < len(FOOTER_BUTTONS):
+            _, action = FOOTER_BUTTONS[idx]
+            if action == "station":
+                state["mode"] = "station"
+                state["platform_filter"] = "ALL"
+                state["picker_open"] = False
+            elif action == "line":
+                state["picker_type"] = "line"
+                state["picker_results"] = state["all_lines"]
+                state["picker_scroll"] = 0
+                state["picker_open"] = True
+            elif action == "pick":
+                state["picker_type"] = "station"
+                state["picker_results"] = state["all_stations"]
+                state["picker_scroll"] = 0
+                state["picker_open"] = True
+            threading.Thread(target=refresh_data, daemon=True).start()
+        return
 
     if state["picker_open"]:
-        row_h = 18 if state["picker_type"] == "station" else 30
-        idx = (y - 42) // row_h + state["picker_scroll"]
-        if 0 <= idx < len(state["picker_results"]):
-            item = state["picker_results"][idx]
+        list_top = HERO_TOP + 14
+        row_h = 24 if state["picker_type"] == "station" else 36
+        idx = (y - list_top) // row_h + state["picker_scroll"]
+        results = state["picker_results"]
+        if 0 <= idx < len(results):
+            item = results[idx]
             state["picker_open"] = False
             if state["picker_type"] == "station":
-                state["station_id"] = item["id"]
-                state["station_en"] = item["name_en"].upper()
-                state["station_ja"] = item.get("name_ja", "")
-                state["mode"] = "station"
+                state["station_id"]      = item["id"]
+                state["station_en"]      = item["name_en"].upper()
+                state["station_ja"]      = item.get("name_ja","")
+                state["mode"]            = "station"
                 state["platform_filter"] = "ALL"
             else:
                 state["line_code"] = item["code"]
-                state["mode"] = "line"
+                state["mode"]      = "line"
             threading.Thread(target=refresh_data, daemon=True).start()
+        return
 
-def open_picker(picker_type):
-    state["picker_type"] = picker_type
-    state["picker_open"] = True
-    state["picker_scroll"] = 0
-    if picker_type == "station":
-        state["picker_results"] = state["all_stations"]
-    else:
-        state["picker_results"] = state["all_lines"]
+    # Platform strip — full strip height
+    if state["mode"] == "station" and HERO_BOT <= y <= HERO_BOT + STRIP_H:
+        trains = state["station_trains"]
+        seen = set(str(t.get("platform","")).strip() for t in trains
+                   if t.get("platform") and t.get("platform") != "–")
+        platforms = ["ALL"] + sorted(seen, key=lambda v: (float(v) if v.replace(".","").isdigit() else 999, v))
+        cx = 34
+        f_tmp = get_font("xs")
+        img_tmp = Image.new("RGB", (1, 1))
+        d_tmp   = ImageDraw.Draw(img_tmp)
+        for lbl in platforms:
+            tw = text_w(d_tmp, lbl, f_tmp) + 8
+            if x <= cx + tw:
+                state["platform_filter"] = lbl
+                return
+            cx += tw + 4
 
-# ── Main loop ────────────────────────────────────────────────────────────────
-
+# ── Main loop ─────────────────────────────────────────────────────────────────
 def main():
-    if IS_PI:
-        os.environ.setdefault("SDL_FBDEV", "/dev/fb1")
-        os.environ.setdefault("SDL_VIDEODRIVER", "fbcon")
-        os.environ.setdefault("SDL_NOMOUSE", "1")
+    _open_fb()
 
-    pygame.init()
-    load_fonts()
+    threading.Thread(target=background_loop, daemon=True).start()
+    threading.Thread(target=handle_touch_events, args=(_touch_q,), daemon=True).start()
 
-    flags = 0 if IS_PI else 0
-    screen = pygame.display.set_mode((SCREEN_W, SCREEN_H), flags)
-    pygame.display.set_caption("Tokyo Train Ticker")
-    pygame.mouse.set_visible(not IS_PI)
+    signal.signal(signal.SIGINT,  lambda *_: sys.exit(0))
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 
-    clock = pygame.time.Clock()
+    interval = 1.0 / FPS
+    print(f"Tokyo Train Ticker running → {FB_DEV}  ({SCREEN_W}x{SCREEN_H})")
 
-    # Start background data thread
-    bg = threading.Thread(target=background_loop, daemon=True)
-    bg.start()
+    while True:
+        t0 = time.time()
 
-    running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_q or event.key == pygame.K_ESCAPE:
-                    running = False
-                elif event.key == pygame.K_s:
-                    state["mode"] = "station"
-                    state["picker_open"] = False
-                elif event.key == pygame.K_l:
-                    open_picker("line")
-                elif event.key == pygame.K_p:
-                    open_picker("station")
-                elif event.key == pygame.K_f and state["mode"] == "station":
-                    # Cycle platform filter
-                    trains = state["station_trains"]
-                    plats = ["ALL"] + _get_platforms(trains)
-                    cur = state["platform_filter"]
-                    idx = plats.index(cur) if cur in plats else 0
-                    state["platform_filter"] = plats[(idx + 1) % len(plats)]
-                elif event.key == pygame.K_UP and state["picker_open"]:
-                    state["picker_scroll"] = max(0, state["picker_scroll"] - 1)
-                elif event.key == pygame.K_DOWN and state["picker_open"]:
-                    state["picker_scroll"] = min(
-                        max(0, len(state["picker_results"]) - 1),
-                        state["picker_scroll"] + 1
-                    )
-            elif event.type in (pygame.MOUSEBUTTONDOWN, pygame.FINGERDOWN):
-                pos = event.pos if event.type == pygame.MOUSEBUTTONDOWN else (
-                    int(event.x * SCREEN_W), int(event.y * SCREEN_H)
-                )
-                handle_touch(pos, (SCREEN_W, SCREEN_H))
+        while not _touch_q.empty():
+            try:
+                process_touch(*_touch_q.get_nowait())
+            except Exception as e:
+                print(f"process_touch error: {e}")
 
-        # Draw
-        screen.fill(C_BG)
-        draw_header(screen)
+        img  = Image.new("RGB", (SCREEN_W, SCREEN_H), BLACK)
+        draw = ImageDraw.Draw(img)
+
+        draw_header(draw)
 
         if state["picker_open"]:
-            draw_picker(screen)
+            draw_picker(draw)
         elif state["mode"] == "station":
-            draw_station_board(screen)
+            draw_hero_card(draw)
+            plt_bottom = draw_platform_strip(draw)
+            draw_upcoming_list(draw, plt_bottom)
         else:
-            draw_line_tracker(screen)
+            draw_line_tracker(draw)
 
-        draw_footer(screen)
+        draw_footer(draw)
 
-        if not state["connected"]:
-            msg = "Connecting to backend…"
-            mw = fonts["sm"].size(msg)[0]
-            draw_text(screen, msg, SCREEN_W // 2 - mw // 2, SCREEN_H // 2, fonts["sm"], C_DIM)
+        flush(img)
 
-        pygame.display.flip()
-        clock.tick(10)  # 10 FPS is plenty for train info
-
-    pygame.quit()
-    sys.exit(0)
+        elapsed = time.time() - t0
+        time.sleep(max(0, interval - elapsed))
 
 
 if __name__ == "__main__":
