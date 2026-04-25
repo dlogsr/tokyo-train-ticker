@@ -14,7 +14,7 @@ sudo apt-get install -y --no-install-recommends \
   python3 python3-pip python3-venv \
   python3-pygame \
   git curl wget \
-  libatlas-base-dev libopenjp2-7 libtiff5 \
+  libopenblas-dev libopenjp2-7 libtiff6 \
   fonts-noto-cjk \
   fbset
 
