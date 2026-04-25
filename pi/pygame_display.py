@@ -10,6 +10,9 @@ import time
 import threading
 import signal
 import struct
+import json
+
+import math as _math
 
 try:
     from PIL import Image, ImageDraw, ImageFont
@@ -26,9 +29,40 @@ except ImportError:
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SCREEN_W, SCREEN_H = 320, 240
-API_BASE  = os.getenv("API_BASE", "http://localhost:8000")
-FB_DEV    = os.getenv("FB_DEV",   "/dev/fb0")
-FPS       = 8
+API_BASE   = os.getenv("API_BASE", "http://localhost:8000")
+FB_DEV     = os.getenv("FB_DEV",   "/dev/fb0")
+FPS        = 8
+CALIB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration.json")
+
+# Calibration coefficients: screen_x = sx_scale*raw_y + sx_offset
+#                           screen_y = sy_scale*raw_x + sy_offset
+# None = use default formula (raw axis ranges from device sysfs)
+_calib: dict = {}
+_calibration_mode = False   # set True to emit raw_tap events
+
+def load_calibration() -> bool:
+    global _calib
+    try:
+        with open(CALIB_FILE) as f:
+            data = json.load(f)
+        # Sanity-check: scales should be in a reasonable range for this screen
+        sx, sy = abs(data.get("sx_scale", 0)), abs(data.get("sy_scale", 0))
+        if not (0.3 <= sx <= 5.0 and 0.3 <= sy <= 5.0):
+            print(f"Calibration file has implausible values (sx={sx:.3f} sy={sy:.3f}), ignoring")
+            return False
+        _calib = data
+        print(f"Calibration loaded: sx_scale={data['sx_scale']:.3f} sy_scale={data['sy_scale']:.3f}")
+        return True
+    except Exception:
+        return False
+
+def save_calibration():
+    try:
+        with open(CALIB_FILE, "w") as f:
+            json.dump(_calib, f, indent=2)
+        print(f"Calibration saved → {CALIB_FILE}")
+    except Exception as e:
+        print(f"Could not save calibration: {e}")
 
 # ── Layout constants ──────────────────────────────────────────────────────────
 HDR_H    = 22          # header height
@@ -49,6 +83,64 @@ CARS = {
     "I":  6,  "S":  8,  "E":  6,  "TY": 8,  "DT": 10,
     "OM": 4,  "MG": 5,  "KO": 10, "OH": 10, "SI": 8,
     "TJ": 8,  "KS": 8,
+}
+
+# ── Japanese destination/line name lookups ────────────────────────────────────
+DEST_JA = {
+    "IKEBUKURO": "池袋",   "SHIBUYA": "渋谷",     "SHINJUKU": "新宿",
+    "UENO": "上野",         "TOKYO": "東京",        "TAKAO": "高尾",
+    "TACHIKAWA": "立川",   "OGIKUBO": "荻窪",      "CHIBA": "千葉",
+    "MITAKA": "三鷹",      "OMIYA": "大宮",         "OFUNA": "大船",
+    "YOKOHAMA": "横浜",    "OSAKI": "大崎",         "UTSUNOMIYA": "宇都宮",
+    "TAKASAKI": "高崎",    "KAMAKURA": "鎌倉",      "ZUSHI": "逗子",
+    "SHINAGAWA": "品川",   "NARITA": "成田",
+    "ASAKUSA": "浅草",     "GINZA": "銀座",          "HONANCHO": "方南町",
+    "KITASENJU": "北千住", "NAKAMEGURO": "中目黒",   "NAKA-MEGURO": "中目黒",
+    "NAKANO": "中野",      "NISHIFUNABASHI": "西船橋","NISHI-FUNABASHI": "西船橋",
+    "YOYOGI-UEHARA": "代々木上原", "AYASE": "綾瀬", "ABIKO": "我孫子",
+    "WAKOSHI": "和光市",   "SHIN-KIBA": "新木場",    "SHINKIBA": "新木場",
+    "OSHIAGE": "押上",     "NAGATSUTA": "長津田",    "TOCHOMAE": "都庁前",
+    "MEGURO": "目黒",      "NISHI-TAKASHIMADAIRA": "西高島平",
+    "MOTOMACHI-CHUKAGAI": "元町・中華街",
+    "NISHI-MAGOME": "西馬込",       "HIKARIGAOKA": "光が丘",
+    "NERIMA-KASUGACHO": "練馬春日町",
+    "FUTAKO-TAMAGAWA": "二子玉川",  "MIZONOKUCHI": "溝の口",
+    "MOTOSUMIYOSHI": "元住吉",      "CHOFU": "調布",
+    "HASHIMOTO": "橋本",            "KEIO-HACHIOJI": "京王八王子",
+    "KEIO-SAGAMIHARA": "京王相模原","KICHIJOJI": "吉祥寺",
+    "ODAWARA": "小田原",            "FUJISAWA": "藤沢",
+    "KARAKIDA": "唐木田",           "KATASE-ENOSHIMA": "片瀬江ノ島",
+    "HANNO": "飯能",                "OGOSE": "越生",
+    "KAWAGOE": "川越",              "TOBU-NIKKO": "東武日光",
+    "AIZUWAKAMATSU": "会津若松",    "URAGA": "浦賀",
+    "NARITA-SKYACCESS": "成田スカイアクセス",
+    "HANEDA-AIRPORT": "羽田空港",   "NARITA-AIRPORT": "成田空港",
+    "HANEDA-AIRPORT-T1": "羽田空港第1ターミナル",
+    "TOYOSU": "豊洲",   "SHIMBASHI": "新橋",         "HAMAMATSUCHO": "浜松町",
+    "URAWA-MISONO": "浦和美園",     "SHINOZAKIMACHI": "篠崎",
+    "HANA-KOGANEI": "花小金井",     "NISHI-SHINJUKU": "西新宿",
+    "MUSASHI-KYURYO": "武蔵丘",
+}
+
+LINE_NAME_JA = {
+    "JY": "山手線",        "JC": "中央線",          "JB": "中央・総武線",
+    "JK": "京浜東北線",    "JA": "埼京線",           "JH": "横須賀線",
+    "JU": "宇都宮・高崎線","JE": "京葉線",           "JO": "横須賀・総武線",
+    "G":  "銀座線",        "M":  "丸ノ内線",         "H":  "日比谷線",
+    "T":  "東西線",        "C":  "千代田線",         "Y":  "有楽町線",
+    "Z":  "半蔵門線",      "N":  "南北線",            "F":  "副都心線",
+    "A":  "浅草線",        "I":  "三田線",            "S":  "新宿線",
+    "E":  "大江戸線",
+    "TY": "東横線",        "DT": "田園都市線",       "OM": "大井町線",
+    "MG": "目黒線",        "KK": "空港線",
+    "KO": "京王線",        "KL": "京王相模原線",      "KI": "井の頭線",
+    "OH": "小田原線",      "OE": "江ノ島線",
+    "SI": "池袋線",        "SS": "新宿線",
+    "TJ": "東上線",        "TS": "スカイツリーライン",
+    "KS": "本線",          "KE": "本線",
+    "MM": "みなとみらい線","SR": "埼玉高速鉄道線",
+    "RI": "りんかい線",    "YU": "ゆりかもめ",
+    "MO": "東京モノレール",
 }
 
 # ── Colors (RGB tuples) ───────────────────────────────────────────────────────
@@ -104,6 +196,23 @@ def flush(img: Image.Image):
         _fb.flush()
     except Exception as e:
         print(f"fb write error: {e}")
+
+def _cleanup():
+    """Clear framebuffer and restore terminal on exit."""
+    if _fb is not None:
+        try:
+            _fb.seek(0)
+            _fb.write(b"\x00" * SCREEN_W * SCREEN_H * 2)
+            _fb.flush()
+        except Exception:
+            pass
+    for tty in ("/dev/tty1", "/dev/tty"):
+        try:
+            with open(tty, "wb") as t:
+                t.write(b"\033[?25h\033c")  # show cursor + full reset
+            break
+        except Exception:
+            pass
 
 # ── Fonts ─────────────────────────────────────────────────────────────────────
 FONT_PATHS = [
@@ -190,8 +299,18 @@ state = {
     "picker_type":    None,
     "picker_results": [],
     "picker_scroll":  0,
-    "list_scroll":    0,   # upcoming train list scroll offset
+    "list_scroll":    0,
+    "confirm_exit":   False,
+    "calibrating":    False,
+    "calib_step":     0,
+    "calib_taps":     [],
 }
+
+_hold_start_time: float = 0.0   # set by touch thread, read by draw loop
+_hold_pos: tuple = (0, 0)       # screen coords where hold started
+_hold_consumed: bool = False    # True once hold action fired, suppresses tap
+_last_tap_pos = None            # for tap indicator
+_last_tap_time: float = 0.0
 
 # ── Data fetching ─────────────────────────────────────────────────────────────
 def fetch(url):
@@ -266,6 +385,119 @@ def draw_badge(draw, x, y, code, color, text_color, shape, size=13):
     draw.text((x + (w - tw)//2, y + (h - f.size)//2), code, font=f, fill=rgb_fg)
     return w
 
+def draw_dest(draw, x, y, dest_en, font_en, color, max_w):
+    """Draw destination with kanji prefix when available."""
+    key = dest_en.upper().lstrip("→ ").strip()
+    ja  = DEST_JA.get(key, "")
+    if ja:
+        f_ja = get_cjk_font(10)
+        draw.text((x, y), ja, font=f_ja, fill=(150, 125, 50))
+        x     += text_w(draw, ja, f_ja) + 3
+        max_w -= text_w(draw, ja, f_ja) + 3
+    draw_text(draw, x, y, dest_en, font_en, color, max_w)
+
+# ── Operator logo drawing ─────────────────────────────────────────────────────
+
+def _logo_bg(draw, bx, by, size, color, radius=None):
+    if radius is None:
+        radius = max(4, size // 8)
+    draw.rounded_rectangle([bx, by, bx + size, by + size], radius=radius, fill=color)
+
+def draw_operator_logo(draw, bx, by, size, operator, code, color, text_color):
+    """Draw an operator-specific geometric logo in the given square bbox."""
+    bg  = hex_to_rgb(color)
+    fg  = hex_to_rgb(text_color)
+    cx  = bx + size // 2
+    cy  = by + size // 2
+
+    if operator == "JR-East":
+        _logo_bg(draw, bx, by, size, (22, 22, 22))
+        dot = max(4, size // 9)
+        draw.ellipse([bx+size-dot*3, by+dot, bx+size-dot, by+dot*3], fill=(200, 70, 20))
+        f = get_font("xl"); lw = text_w(draw, "JR", f)
+        draw.text((cx - lw//2, cy - f.size//2), "JR", font=f, fill=(220, 220, 220))
+
+    elif operator == "TokyoMetro":
+        # Blue square, Metro M mark with two dots
+        _logo_bg(draw, bx, by, size, (0, 157, 224), radius=size // 10)
+        f = get_font("xl"); lw = text_w(draw, "M", f)
+        my = cy - f.size // 2 + 2
+        draw.text((cx - lw//2, my), "M", font=f, fill=(255, 255, 255))
+        dr = max(3, size // 13)
+        dy = my - dr - 2
+        for dx in (-lw//4, lw//4):
+            draw.ellipse([cx+dx-dr, dy-dr, cx+dx+dr, dy+dr], fill=(255, 255, 255))
+        f2 = get_font("xs"); lnw = text_w(draw, code, f2)
+        draw.text((cx - lnw//2, by + size - f2.size - 2), code, font=f2, fill=(200, 240, 255))
+
+    elif operator == "Toei":
+        # Green with simplified ginkgo fan
+        _logo_bg(draw, bx, by, size, (0, 160, 74))
+        pad = size // 7
+        fan_cx, fan_cy = cx, by + size - pad - 2
+        fan_r = int(size * 0.62)
+        draw.pieslice([fan_cx-fan_r, fan_cy-fan_r, fan_cx+fan_r, fan_cy+fan_r],
+                      start=200, end=340, fill=(255, 255, 255))
+        nw = max(3, size // 11)
+        draw.rectangle([fan_cx-nw, by+pad+2, fan_cx+nw, fan_cy], fill=(0, 160, 74))
+        draw.rectangle([fan_cx-2, fan_cy-2, fan_cx+2, by+size-3], fill=(255, 255, 255))
+        f2 = get_font("xs"); lnw = text_w(draw, code, f2)
+        draw.text((cx - lnw//2, by+2), code, font=f2, fill=(200, 255, 200))
+
+    elif operator == "Tokyu":
+        # Red with 5-point white star
+        _logo_bg(draw, bx, by, size, (230, 0, 18))
+        ro, ri = size // 3, size // 7
+        pts = []
+        for i in range(10):
+            a = _math.pi * i / 5 - _math.pi / 2
+            r = ro if i % 2 == 0 else ri
+            pts.append((cx + r * _math.cos(a), cy - size//14 + r * _math.sin(a)))
+        draw.polygon(pts, fill=(255, 255, 255))
+
+    elif operator == "Tobu":
+        # Navy blue, bold TOBU text
+        _logo_bg(draw, bx, by, size, (0, 65, 160))
+        f = get_font("lg"); lw = text_w(draw, "TOBU", f)
+        draw.text((cx - lw//2, cy - f.size//2), "TOBU", font=f, fill=(255, 255, 255))
+
+    elif operator == "Seibu":
+        # White bg, two overlapping blue circles
+        _logo_bg(draw, bx, by, size, (255, 255, 255), radius=4)
+        r, sh = size // 3, size // 8
+        draw.ellipse([cx-r-sh, cy-r, cx+r-sh, cy+r], fill=(0, 113, 188))
+        draw.ellipse([cx-r+sh, cy-r, cx+r+sh, cy+r], fill=(0, 170, 220))
+        # "S" in white centred in overlap
+        f = get_font("lg"); sw = text_w(draw, "S", f)
+        draw.text((cx-sw//2, cy-f.size//2), "S", font=f, fill=(255, 255, 255))
+
+    elif operator == "Odakyu":
+        # Sky blue with white teardrop arrow
+        _logo_bg(draw, bx, by, size, (0, 173, 239))
+        r = size // 4; ox = size // 10
+        draw.ellipse([cx-r+ox, cy-r, cx+r+ox, cy+r], fill=(255, 255, 255))
+        draw.polygon([(cx-r+ox+2, cy),
+                      (cx - size//3, cy - size//5),
+                      (cx - size//3, cy + size//5)], fill=(255, 255, 255))
+
+    elif operator in ("Keio", "Keisei"):
+        col = (0, 31, 98) if operator == "Keio" else bg
+        _logo_bg(draw, bx, by, size, col)
+        lbl = "KEIO" if operator == "Keio" else code
+        f = get_font("lg"); lw = text_w(draw, lbl, f)
+        draw.text((cx - lw//2, cy - f.size//2), lbl, font=f, fill=(255, 255, 255))
+
+    elif operator == "Keikyu":
+        _logo_bg(draw, bx, by, size, (211, 0, 47))
+        f = get_font("xl"); lw = text_w(draw, "KQ", f)
+        draw.text((cx - lw//2, cy - f.size//2), "KQ", font=f, fill=(255, 255, 255))
+
+    else:
+        # Generic: operator color with line code
+        draw.rounded_rectangle([bx, by, bx+size, by+size], radius=max(4, size//8), fill=bg)
+        f = get_font("xl"); lw = text_w(draw, code, f)
+        draw.text((cx - lw//2, cy - f.size//2), code, font=f, fill=fg)
+
 def dot_grid_overlay(img):
     arr = np.array(img)
     for y in range(0, SCREEN_H, 4):
@@ -308,49 +540,47 @@ def draw_hero_card(draw):
     bright  = brighten(color)
     shape   = train.get("shape", "rect")
 
+    code     = train["line_code"]
+    line_obj = next((l for l in state["all_lines"] if l["code"] == code), {})
+    operator = line_obj.get("operator", "")
+
     badge_size = 68
     bx = (100 - badge_size) // 2
     by = HERO_TOP + (88 - badge_size) // 2
-    code   = train["line_code"]
-    rgb_bg = color
-    rgb_fg = hex_to_rgb(train.get("text_color", "#000000"))
-    brect  = [bx, by, bx + badge_size, by + badge_size]
-    if shape == "circle":
-        draw.ellipse(brect, fill=rgb_bg)
-    elif shape == "square":
-        draw.rounded_rectangle(brect, radius=4, fill=rgb_bg)
-    else:
-        draw.rounded_rectangle(brect, radius=10, fill=rgb_bg)
-    f_big = get_font("xl")
-    tw = text_w(draw, code, f_big)
-    draw.text((bx + (badge_size - tw)//2, by + (badge_size - f_big.size)//2),
-              code, font=f_big, fill=rgb_fg)
+    draw_operator_logo(draw, bx, by, badge_size, operator, code,
+                       train.get("color", "#888888"), train.get("text_color", "#000000"))
 
     rx = 104
-    line_obj  = next((l for l in state["all_lines"] if l["code"] == code), {})
-    line_name = line_obj.get("name", code)
+    line_name    = line_obj.get("name", code)
+    line_name_ja = LINE_NAME_JA.get(code, "")
 
-    # Car formation diagram — right side of line-name row
+    # Car formation diagram — right side of line-name row (x=218 to 316)
     n_cars = CARS.get(code, 8)
-    car_avail = SCREEN_W - 4 - 218   # x=218 to x=316 = 98px
+    car_avail = SCREEN_W - 4 - 218
     car_w = min(14, max(5, (car_avail - (n_cars - 1) * 2) // n_cars))
-    car_h = 9
     car_gap = 2
     total_car_w = n_cars * (car_w + car_gap) - car_gap
     car_x = 218 + max(0, (car_avail - total_car_w) // 2)
     car_y = HERO_TOP + 4
     for ci in range(n_cars):
-        cx = car_x + ci * (car_w + car_gap)
-        fill = color if ci < n_cars - 1 else brighten(color, f=0.8, add=0)
-        draw.rectangle([cx, car_y, cx + car_w, car_y + car_h], fill=fill)
+        cx_car = car_x + ci * (car_w + car_gap)
+        draw.rectangle([cx_car, car_y, cx_car + car_w, car_y + 9], fill=color)
     f_xs = get_font("xs")
-    nc_label = f"{n_cars}c"
-    draw.text((car_x + total_car_w + 3, car_y), nc_label, font=f_xs, fill=(50, 50, 50))
+    draw.text((car_x + total_car_w + 3, car_y), f"{n_cars}c", font=f_xs, fill=(50, 50, 50))
 
-    draw_text(draw, rx, HERO_TOP + 4, line_name.upper(), f_xs, DIM, max_w=110)
+    # Line name: Japanese + English, truncated before car diagram
+    if line_name_ja:
+        f_ja = get_cjk_font(10)
+        draw.text((rx, HERO_TOP + 4), line_name_ja, font=f_ja, fill=(130, 108, 45))
+        lnj_w = text_w(draw, line_name_ja, f_ja)
+        draw_text(draw, rx + lnj_w + 3, HERO_TOP + 5, line_name.upper(),
+                  f_xs, (40, 40, 40), max_w=110 - lnj_w - 3)
+    else:
+        draw_text(draw, rx, HERO_TOP + 4, line_name.upper(), f_xs, DIM, max_w=110)
 
-    dest = ("→ " + train.get("destination", "")).upper()
-    draw_text(draw, rx, HERO_TOP + 16, dest, get_font("md"), bright, max_w=210)
+    # Destination with kanji prefix
+    dest_en = ("→ " + train.get("destination", "")).upper()
+    draw_dest(draw, rx, HERO_TOP + 16, dest_en, get_font("md"), bright, max_w=210)
 
     eta = train.get("eta_min", 0)
     if eta <= 1:
@@ -468,8 +698,8 @@ def draw_upcoming_list(draw, top_y):
         draw_badge(draw, 5, row_y+3, code, t.get("color","#888"),
                    t.get("text_color","#fff"), t.get("shape","rect"), size=14)
 
-        dest = t.get("destination","").upper()[:11]
-        draw_text(draw, 38, row_y+4, dest, f_xs, bright, max_w=196)
+        dest = t.get("destination","").upper()
+        draw_dest(draw, 38, row_y+4, dest, f_xs, bright, max_w=196)
 
         if t.get("delay_min", 0) > 0:
             draw.ellipse([240, row_y+6, 245, row_y+11], fill=(230,120,34))
@@ -498,10 +728,18 @@ def draw_line_tracker(draw):
 
     draw.rectangle([0, HERO_TOP, SCREEN_W, HERO_TOP+24], fill=(8,8,8))
     draw.line([0, HERO_TOP+24, SCREEN_W, HERO_TOP+24], fill=BORDER)
-    bw = draw_badge(draw, 4, HERO_TOP+5, state["line_code"],
+    lc = state["line_code"]
+    bw = draw_badge(draw, 4, HERO_TOP+5, lc,
                     line_obj.get("color","#888"), line_obj.get("text_color","#fff"),
                     shape, size=16)
-    draw.text((10 + bw, HERO_TOP+7), line_obj.get("name","").upper(),
+    # Line name with Japanese
+    lnj = LINE_NAME_JA.get(lc, "")
+    nx = 10 + bw
+    if lnj:
+        f_cjk = get_cjk_font(11)
+        draw.text((nx, HERO_TOP+6), lnj, font=f_cjk, fill=(140, 115, 50))
+        nx += text_w(draw, lnj, f_cjk) + 4
+    draw.text((nx, HERO_TOP+7), line_obj.get("name","").upper(),
               font=get_font("sm"), fill=bright)
     cnt = f"{len(trains)} trains"
     cw = text_w(draw, cnt, get_font("xs"))
@@ -516,12 +754,13 @@ def draw_line_tracker(draw):
             break
         bg = (10,10,10) if trains.index(t)%2==0 else BLACK
         draw.rectangle([0, row_y, SCREEN_W, row_y+row_h], fill=bg)
+        draw.rectangle([0, row_y, 3, row_y+row_h], fill=color)
         draw.line([0, row_y+row_h-1, SCREEN_W, row_y+row_h-1], fill=BORDER)
 
-        draw.text((4, row_y+2), f"#{t.get('train_number','')}", font=f_xs, fill=DIM)
+        draw.text((6, row_y+2), f"#{t.get('train_number','')}", font=f_xs, fill=DIM)
 
-        dest = ("→ " + t.get("destination","")).upper()
-        draw_text(draw, 4, row_y+14, dest, f_xs, bright, max_w=250)
+        dest_en = ("→ " + t.get("destination","")).upper()
+        draw_dest(draw, 6, row_y+14, dest_en, f_xs, bright, max_w=244)
 
         if t.get("delay_min",0) > 0:
             ds = f"+{t['delay_min']}m"
@@ -564,8 +803,14 @@ def draw_picker(draw):
                 break
             bg = (12,12,12) if results.index(item)%2==0 else (8,8,8)
             draw.rectangle([0, row_y, SCREEN_W, row_y+row_h], fill=bg)
-            draw_text(draw, 4, row_y+3, item["name_en"].upper(), f_sm, WHITE, max_w=140)
-            draw.text((4, row_y+14), item.get("name_ja",""), font=f_xs, fill=(70,70,70))
+            ja = item.get("name_ja", "")
+            if ja:
+                f_cjk = get_cjk_font(13)
+                draw.text((4, row_y+4), ja, font=f_cjk, fill=(160, 130, 60))
+                jw = text_w(draw, ja, f_cjk) + 5
+            else:
+                jw = 0
+            draw_text(draw, 4 + jw, row_y+5, item["name_en"].upper(), f_sm, WHITE, max_w=140 - jw)
             bx = 190
             for lc in item.get("lines",[])[:6]:
                 lo = next((l for l in state["all_lines"] if l["code"]==lc), None)
@@ -594,11 +839,73 @@ def draw_picker(draw):
             draw_text(draw, rx+4, row_y+26, short, f_xs, DIM, max_w=col_w-8)
 
 FOOTER_BUTTONS = [("STN", "station"), ("LINE", "line"), ("PICK", "pick")]
+
+def draw_exit_confirm(draw):
+    """Full-screen exit confirmation overlay."""
+    draw.rectangle([0, HDR_H, SCREEN_W, FOOTER_Y], fill=(4, 4, 4))
+    draw.rounded_rectangle([16, 50, 304, 190], radius=10, fill=(14, 14, 14))
+    draw.rounded_rectangle([16, 50, 304, 190], radius=10, outline=(55, 55, 55))
+    f_md = get_font("md"); f_sm = get_font("sm"); f_xs = get_font("xs")
+    draw.text((SCREEN_W//2 - text_w(draw, "STOP DISPLAY?", f_md)//2, 62),
+              "STOP DISPLAY?", font=f_md, fill=WHITE)
+    draw.text((SCREEN_W//2 - text_w(draw, "hold 2s on STN/LINE", f_xs)//2, 82),
+              "hold 2s on STN/LINE", font=f_xs, fill=(40, 40, 40))
+    # EXIT button
+    draw.rounded_rectangle([24, 102, 104, 142], radius=6, fill=(160, 20, 20))
+    draw.text((64 - text_w(draw, "EXIT", f_md)//2, 115), "EXIT", font=f_md, fill=WHITE)
+    # CALIBRATE button
+    draw.rounded_rectangle([112, 102, 208, 142], radius=6, fill=(20, 50, 80))
+    draw.text((160 - text_w(draw, "CALIB", f_sm)//2, 119), "CALIB", font=f_sm, fill=(120, 180, 255))
+    # CANCEL button
+    draw.rounded_rectangle([216, 102, 296, 142], radius=6, fill=(22, 22, 22))
+    draw.rounded_rectangle([216, 102, 296, 142], radius=6, outline=(55, 55, 55))
+    draw.text((256 - text_w(draw, "CANCEL", f_sm)//2, 119), "CANCEL", font=f_sm, fill=DIM)
+    draw.text((SCREEN_W//2 - text_w(draw, "long-press PICK to calibrate", f_xs)//2, 152),
+              "long-press PICK to calibrate", font=f_xs, fill=(35, 35, 35))
+
+def draw_calibration(draw):
+    """4-corner calibration UI."""
+    draw.rectangle([0, 0, SCREEN_W, SCREEN_H], fill=BLACK)
+    f_sm = get_font("sm"); f_xs = get_font("xs")
+    step = state["calib_step"]
+    if step >= len(_CALIB_TARGETS):
+        draw.text((SCREEN_W//2 - text_w(draw, "Calibration saved!", f_sm)//2, 100),
+                  "Calibration saved!", font=f_sm, fill=GREEN)
+        draw.text((SCREEN_W//2 - text_w(draw, "Returning...", f_xs)//2, 120),
+                  "Returning...", font=f_xs, fill=DIM)
+        return
+    tx, ty, label = _CALIB_TARGETS[step]
+    draw.text((SCREEN_W//2 - text_w(draw, "TOUCH CALIBRATION", f_sm)//2, 8),
+              "TOUCH CALIBRATION", font=f_sm, fill=(80, 80, 80))
+    draw.text((SCREEN_W//2 - 30, 26), f"Step {step+1} of {len(_CALIB_TARGETS)}",
+              font=f_xs, fill=(55, 55, 55))
+    draw.text((SCREEN_W//2 - text_w(draw, f"Tap:  {label}", f_xs)//2, 40),
+              f"Tap:  {label}", font=f_xs, fill=(120, 120, 120))
+    # Crosshair
+    clen = 16
+    draw.line([tx - clen, ty, tx + clen, ty], fill=ORANGE, width=2)
+    draw.line([tx, ty - clen, tx, ty + clen], fill=ORANGE, width=2)
+    draw.ellipse([tx-6, ty-6, tx+6, ty+6], outline=ORANGE, width=2)
+    # Previously registered dots (shown in default-formula screen coords)
+    for i, (rx, ry) in enumerate(state["calib_taps"]):
+        ptx, pty = _CALIB_TARGETS[i][:2]
+        dot_x = round(rx * (SCREEN_W - 1) / _touch_x_max)
+        dot_y = round(ry * (SCREEN_H - 1) / _touch_y_max)
+        draw.ellipse([dot_x-4, dot_y-4, dot_x+4, dot_y+4], fill=GREEN)
+        draw.ellipse([ptx-3, pty-3, ptx+3, pty+3], outline=(60, 60, 60))
+    draw.text((SCREEN_W//2 - text_w(draw, "long-press PICK to cancel", f_xs)//2, SCREEN_H - 14),
+              "long-press PICK to cancel", font=f_xs, fill=(35, 35, 35))
 FOOTER_BW = SCREEN_W // len(FOOTER_BUTTONS)
 
 def draw_footer(draw):
     draw.rectangle([0, FOOTER_Y, SCREEN_W, SCREEN_H], fill=(8,8,8))
     draw.line([0, FOOTER_Y, SCREEN_W, FOOTER_Y], fill=BORDER)
+    # Hold-to-exit progress bar
+    if _hold_start_time > 0:
+        elapsed  = time.time() - _hold_start_time
+        progress = min(1.0, elapsed / 2.0)
+        bar_w    = int(progress * SCREEN_W)
+        draw.rectangle([0, FOOTER_Y, bar_w, FOOTER_Y + 2], fill=ORANGE)
     f = get_font("md")
     ty = FOOTER_Y + (FOOTER_H - f.size) // 2  # vertically centered
     for i, (label, action) in enumerate(FOOTER_BUTTONS):
@@ -644,17 +951,20 @@ def find_touch_device():
     return None
 
 # For this hardware (FT6236 on Adafruit PiTFT 2.8" landscape):
-#   raw_x = vertical axis, range 0–239 (0=bottom, 239=top)
-#   raw_y = horizontal axis, range 0–319 (0=left, 319=right)
-# Transform: screen_x = raw_y, screen_y = 239 - raw_x
-_touch_x_max = SCREEN_H - 1   # 239 — raw_x is the vertical axis
-_touch_y_max = SCREEN_W - 1   # 319 — raw_y is the horizontal axis
+#   ABS_X (rx) = horizontal axis, 0=left, max=right
+#   ABS_Y (ry) = vertical axis,   0=top,  max=bottom
+# Transform: screen_x = rx * (319/xmax),  screen_y = ry * (239/ymax)
+_touch_x_max = SCREEN_W - 1   # 319 — ABS_X is the horizontal axis
+_touch_y_max = SCREEN_H - 1   # 239 — ABS_Y is the vertical axis
 
 def _map_touch(rx, ry, xmax, ymax):
-    # Swap axes, invert screen_y
-    sx = round(ry * (SCREEN_W - 1) / ymax)
-    sy = (SCREEN_H - 1) - round(rx * (SCREEN_H - 1) / xmax)
-    return sx, sy
+    if _calib:
+        sx = round(_calib["sx_scale"] * rx + _calib["sx_offset"])
+        sy = round(_calib["sy_scale"] * ry + _calib["sy_offset"])
+    else:
+        sx = round(rx * (SCREEN_W - 1) / xmax)
+        sy = round(ry * (SCREEN_H - 1) / ymax)
+    return max(0, min(SCREEN_W - 1, sx)), max(0, min(SCREEN_H - 1, sy))
 
 def _read_abs_max(event_dev, axis_code):
     try:
@@ -665,7 +975,7 @@ def _read_abs_max(event_dev, axis_code):
         return None
 
 def handle_touch_events(q):
-    global _touch_x_max, _touch_y_max
+    global _touch_x_max, _touch_y_max, _hold_start_time, _hold_pos, _hold_consumed
     import select
 
     dev = None
@@ -700,6 +1010,7 @@ def handle_touch_events(q):
     x = y = 0
     start_x = start_y = 0
     finger_down = False
+    finger_down_time = 0.0
 
     while True:
         try:
@@ -720,17 +1031,29 @@ def handle_touch_events(q):
             elif etype == EV_KEY and ecode == BTN_TOUCH:
                 if evalue:                       # finger down
                     finger_down = True
-                    start_x, start_y = x, y     # record contact position
-                elif finger_down:               # finger up
-                    finger_down = False
-                    dx = x - start_x            # raw_x delta = vertical screen movement
-                    if abs(dx) >= DRAG_MIN:
-                        # screen_y = (SCREEN_H-1) - raw_x → d(screen_y) = -dx
-                        q.put(("scroll", -dx))
+                    finger_down_time = time.time()
+                    start_x, start_y = x, y
+                    sx0, sy0 = _map_touch(x, y, _touch_x_max, _touch_y_max)
+                    _hold_consumed = False
+                    if sy0 >= FOOTER_Y:
+                        _hold_start_time = finger_down_time
+                        _hold_pos = (sx0, sy0)
                     else:
-                        sx, sy = _map_touch(start_x, start_y,
-                                            _touch_x_max, _touch_y_max)
-                        q.put(("tap", sx, sy))
+                        _hold_start_time = 0.0
+                elif finger_down:               # finger up (may arrive 2s+ late on FT6236)
+                    finger_down = False
+                    _hold_start_time = 0.0      # stop progress bar
+                    sx, sy = _map_touch(start_x, start_y, _touch_x_max, _touch_y_max)
+                    if _calibration_mode:
+                        q.put(("raw_tap", start_x, start_y))
+                    elif _hold_consumed:
+                        _hold_consumed = False  # hold already fired in draw loop; swallow tap
+                    else:
+                        dx = x - start_x
+                        if abs(dx) >= DRAG_MIN:
+                            q.put(("scroll", -dx))
+                        else:
+                            q.put(("tap", sx, sy))
 
         except Exception as e:
             print(f"Touch read error: {e}")
@@ -739,7 +1062,96 @@ def handle_touch_events(q):
 import queue as _queue
 _touch_q = _queue.Queue()
 
+def start_calibration():
+    global _calibration_mode
+    state["calibrating"]  = True
+    state["calib_step"]   = 0
+    state["calib_taps"]   = []
+    state["confirm_exit"] = False
+    state["picker_open"]  = False
+    _calibration_mode = True
+
+def finish_calibration():
+    global _calibration_mode, _calib
+    taps = state["calib_taps"]
+    (rx1,ry1),(rx2,ry2),(rx3,ry3),(rx4,ry4) = taps   # TL, TR, BR, BL
+    tx_l, tx_r = _CALIB_TARGETS[0][0], _CALIB_TARGETS[1][0]   # screen_x: 30, 290
+    ty_t, ty_b = _CALIB_TARGETS[0][1], _CALIB_TARGETS[2][1]   # screen_y: 30, 210
+    # ABS_X (rx) tracks horizontal → group left/right taps by rx
+    avg_rx_l = (rx1 + rx4) / 2;  avg_rx_r = (rx2 + rx3) / 2
+    # ABS_Y (ry) tracks vertical → group top/bottom taps by ry
+    avg_ry_t = (ry1 + ry2) / 2;  avg_ry_b = (ry3 + ry4) / 2
+    sx_scale  = (tx_r - tx_l) / (avg_rx_r - avg_rx_l)
+    sx_offset = tx_l - avg_rx_l * sx_scale
+    sy_scale  = (ty_b - ty_t) / (avg_ry_b - avg_ry_t)
+    sy_offset = ty_t - avg_ry_t * sy_scale
+    _calib = dict(sx_scale=sx_scale, sx_offset=sx_offset,
+                  sy_scale=sy_scale, sy_offset=sy_offset)
+    save_calibration()
+    print(f"Calibration: sx={sx_scale:.3f}+{sx_offset:.1f}  sy={sy_scale:.3f}+{sy_offset:.1f}")
+    _calibration_mode = False
+
+def process_calib_tap(rx, ry):
+    if state["calib_step"] >= len(_CALIB_TARGETS):
+        return
+    state["calib_taps"].append((rx, ry))
+    state["calib_step"] += 1
+    if state["calib_step"] >= len(_CALIB_TARGETS):
+        finish_calibration()
+        # Brief "done" display then auto-return
+        threading.Timer(2.0, lambda: state.update({"calibrating": False})).start()
+
+def check_hold():
+    """Called from main loop each frame. Fires long-press when 2s hold detected."""
+    global _hold_start_time, _hold_consumed
+    if _hold_start_time > 0 and not _hold_consumed:
+        if time.time() - _hold_start_time >= 2.0:
+            _hold_consumed = True
+            _hold_start_time = 0.0
+            process_long_press(*_hold_pos)
+
+def draw_tap_indicator(draw):
+    """Fading ripple at the last tap position."""
+    if _last_tap_pos is None:
+        return
+    elapsed = time.time() - _last_tap_time
+    if elapsed > 0.35:
+        return
+    frac = elapsed / 0.35
+    r = int(6 + 10 * frac)
+    alpha = int(200 * (1.0 - frac))
+    color = (alpha, alpha, alpha)
+    tx, ty = _last_tap_pos
+    draw.ellipse([tx - r, ty - r, tx + r, ty + r], outline=color)
+    if r > 10:
+        draw.ellipse([tx - r//2, ty - r//2, tx + r//2, ty + r//2], outline=(alpha//2, alpha//2, alpha//2))
+
+def process_long_press(x, y):
+    global _calibration_mode
+    if y >= FOOTER_Y:
+        idx = x // FOOTER_BW
+        if idx == 2:                      # PICK → toggle calibration
+            if state["calibrating"]:
+                state["calibrating"] = False
+                _calibration_mode = False
+            else:
+                start_calibration()
+        else:                             # STN or LINE → exit confirm
+            state["confirm_exit"] = True
+
 def process_touch(x, y):
+    # Exit confirmation overlay takes priority
+    if state["confirm_exit"]:
+        if 24 <= x <= 104 and 102 <= y <= 142:     # EXIT
+            import subprocess
+            subprocess.Popen(["systemctl", "stop", "train-display.service"])
+            sys.exit(0)
+        elif 112 <= x <= 208 and 102 <= y <= 142:  # CALIBRATE
+            start_calibration()
+        else:                                        # CANCEL or anywhere else
+            state["confirm_exit"] = False
+        return
+
     if y >= FOOTER_Y:
         idx = x // FOOTER_BW
         if 0 <= idx < len(FOOTER_BUTTONS):
@@ -815,30 +1227,131 @@ def process_scroll(dy):
         limit   = max(0, len(visible) - 1 - 3)   # -1 for hero, ~3 visible rows
         state["list_scroll"] = max(0, min(limit, state["list_scroll"] + delta))
 
+# ── Touch calibration ─────────────────────────────────────────────────────────
+# Four corner targets (screen coords). Order: TL → TR → BR → BL
+_CALIB_TARGETS = [
+    (30,  30,  "TOP-LEFT"),
+    (290, 30,  "TOP-RIGHT"),
+    (290, 210, "BOTTOM-RIGHT"),
+    (30,  210, "BOTTOM-LEFT"),
+]
+
+def _draw_calib_screen(step, label, tx, ty):
+    img  = Image.new("RGB", (SCREEN_W, SCREEN_H), BLACK)
+    draw = ImageDraw.Draw(img)
+    f_sm = get_font("sm")
+    f_xs = get_font("xs")
+    draw.text((SCREEN_W//2 - text_w(draw, "TOUCH CALIBRATION", f_sm)//2, 6),
+              "TOUCH CALIBRATION", font=f_sm, fill=(80, 80, 80))
+    draw.text((SCREEN_W//2 - 30, 22), f"Step {step}/{len(_CALIB_TARGETS)}",
+              font=f_xs, fill=(55, 55, 55))
+    draw.text((SCREEN_W//2 - text_w(draw, f"Tap {label}", f_xs)//2, 34),
+              f"Tap {label}", font=f_xs, fill=(100, 100, 100))
+    # Crosshair
+    clen = 14
+    draw.line([tx - clen, ty, tx + clen, ty], fill=ORANGE, width=2)
+    draw.line([tx, ty - clen, tx, ty + clen], fill=ORANGE, width=2)
+    draw.ellipse([tx-5, ty-5, tx+5, ty+5], outline=ORANGE, width=2)
+    flush(img)
+
+def run_calibration():
+    global _calibration_mode, _calib
+    _open_fb()
+    _calibration_mode = True
+    threading.Thread(target=handle_touch_events, args=(_touch_q,), daemon=True).start()
+    # Give the touch thread time to find and open the device
+    time.sleep(6)
+
+    raw_taps = []
+    for i, (tx, ty, label) in enumerate(_CALIB_TARGETS):
+        _draw_calib_screen(i + 1, label, tx, ty)
+        # Drain any stale events
+        while not _touch_q.empty():
+            _touch_q.get_nowait()
+        # Wait for a single tap
+        while True:
+            time.sleep(0.05)
+            if not _touch_q.empty():
+                ev = _touch_q.get_nowait()
+                if ev[0] == "raw_tap":
+                    rx, ry = ev[1], ev[2]
+                    raw_taps.append((rx, ry))
+                    print(f"  {label}: raw=({rx},{ry})  target=({tx},{ty})")
+                    # Brief flash to confirm
+                    img = Image.new("RGB", (SCREEN_W, SCREEN_H), (0, 30, 0))
+                    flush(img)
+                    time.sleep(0.3)
+                    break
+
+    # Compute linear mapping from 4 point pairs (TL, TR, BR, BL)
+    (rx1,ry1),(rx2,ry2),(rx3,ry3),(rx4,ry4) = raw_taps
+    tx_l, tx_r = _CALIB_TARGETS[0][0], _CALIB_TARGETS[1][0]  # 30, 290
+    ty_t, ty_b = _CALIB_TARGETS[0][1], _CALIB_TARGETS[2][1]  # 30, 210
+
+    avg_rx_left  = (rx1 + rx4) / 2   # ABS_X for left-side taps (TL, BL)
+    avg_rx_right = (rx2 + rx3) / 2   # ABS_X for right-side taps (TR, BR)
+    avg_ry_top   = (ry1 + ry2) / 2   # ABS_Y for top taps (TL, TR)
+    avg_ry_bot   = (ry3 + ry4) / 2   # ABS_Y for bottom taps (BR, BL)
+
+    sx_scale  = (tx_r - tx_l) / (avg_rx_right - avg_rx_left)
+    sx_offset = tx_l - avg_rx_left * sx_scale
+    sy_scale  = (ty_b - ty_t) / (avg_ry_bot - avg_ry_top)
+    sy_offset = ty_t - avg_ry_top * sy_scale
+
+    _calib = dict(sx_scale=sx_scale, sx_offset=sx_offset,
+                  sy_scale=sy_scale, sy_offset=sy_offset)
+    print(f"\nCalibration: {_calib}")
+    save_calibration()
+
+    img  = Image.new("RGB", (SCREEN_W, SCREEN_H), BLACK)
+    draw = ImageDraw.Draw(img)
+    draw.text((10, 90),  "Calibration saved!", font=get_font("md"), fill=GREEN)
+    draw.text((10, 112), CALIB_FILE,           font=get_font("xs"), fill=(50, 50, 50))
+    draw.text((10, 128), "Restart the service to apply.", font=get_font("xs"), fill=(50, 50, 50))
+    flush(img)
+    time.sleep(4)
+
 # ── Main loop ─────────────────────────────────────────────────────────────────
 def main():
     _ensure_cjk_font()
+
+    if "--calibrate" in sys.argv:
+        run_calibration()
+        return
+
+    load_calibration()
     _open_fb()
 
     threading.Thread(target=background_loop, daemon=True).start()
     threading.Thread(target=handle_touch_events, args=(_touch_q,), daemon=True).start()
 
+    import atexit
+    atexit.register(_cleanup)
     signal.signal(signal.SIGINT,  lambda *_: sys.exit(0))
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 
     interval = 1.0 / FPS
     print(f"Tokyo Train Ticker running → {FB_DEV}  ({SCREEN_W}x{SCREEN_H})")
 
+    global _last_tap_pos, _last_tap_time
+
     while True:
         t0 = time.time()
+
+        check_hold()   # fires long-press at exactly 2s while finger is still down
 
         while not _touch_q.empty():
             try:
                 event = _touch_q.get_nowait()
-                if event[0] == "tap":
+                if event[0] == "raw_tap" and state["calibrating"]:
+                    process_calib_tap(event[1], event[2])
+                elif event[0] == "tap":
+                    _last_tap_pos = (event[1], event[2])
+                    _last_tap_time = time.time()
                     process_touch(event[1], event[2])
                 elif event[0] == "scroll":
                     process_scroll(event[1])
+                # long_tap removed — hold detection now handled by check_hold()
             except Exception as e:
                 print(f"touch event error: {e}")
 
@@ -847,7 +1360,11 @@ def main():
 
         draw_header(draw)
 
-        if state["picker_open"]:
+        if state["calibrating"]:
+            draw_calibration(draw)
+        elif state["confirm_exit"]:
+            draw_exit_confirm(draw)
+        elif state["picker_open"]:
             draw_picker(draw)
         elif state["mode"] == "station":
             draw_hero_card(draw)
@@ -857,6 +1374,7 @@ def main():
             draw_line_tracker(draw)
 
         draw_footer(draw)
+        draw_tap_indicator(draw)
 
         flush(img)
 
