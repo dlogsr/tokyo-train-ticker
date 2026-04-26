@@ -309,6 +309,7 @@ state = {
 _hold_start_time: float = 0.0   # set by touch thread, read by draw loop
 _hold_pos: tuple = (0, 0)       # screen coords where hold started
 _hold_consumed: bool = False    # True once hold action fired, suppresses tap
+_service_start_time: float = 0.0  # set in main(); hold ignored for first 15s
 _last_tap_pos = None            # for tap indicator
 _last_tap_time: float = 0.0
 _last_raw: tuple = (0, 0)       # raw (rx, ry) of last tap — shown in debug overlay
@@ -951,19 +952,19 @@ def find_touch_device():
     print("No touch device found — check /proc/bus/input/devices")
     return None
 
-# FT6236 touch axes after applying "mirror-vertical then rotate-90°CCW" correction:
-#   ABS_X (rx) → screen_x (horizontal)
-#   ABS_Y (ry) → screen_y (vertical, inverted: ry=0 is bottom of screen)
-_touch_x_max = SCREEN_W - 1   # 319 — default for ABS_X horizontal range
-_touch_y_max = SCREEN_H - 1   # 239 — default for ABS_Y vertical range
+# FT6236 axis mapping for PiTFT 2.8" landscape:
+#   ABS_Y (ry, inverted) → screen X    ABS_X → screen Y
+# i.e. axes are swapped with ry inverted — equivalent to mirror-V then 90°CCW.
+_touch_x_max = SCREEN_W - 1   # 319
+_touch_y_max = SCREEN_H - 1   # 239
 
 def _map_touch(rx, ry, xmax, ymax):
     if _calib:
         sx = round(_calib["sx_scale"] * rx + _calib["sx_offset"])
         sy = round(_calib["sy_scale"] * ry + _calib["sy_offset"])
     else:
-        sx = round(rx * (SCREEN_W - 1) / xmax)
-        sy = round((ymax - ry) * (SCREEN_H - 1) / ymax)
+        sx = round((ymax - ry) * (SCREEN_W - 1) / ymax)   # ABS_Y inverted → X
+        sy = round(rx * (SCREEN_H - 1) / xmax)             # ABS_X → Y
     return max(0, min(SCREEN_W - 1, sx)), max(0, min(SCREEN_H - 1, sy))
 
 def _read_abs_max(event_dev, axis_code):
@@ -1104,6 +1105,11 @@ def process_calib_tap(rx, ry):
 def check_hold():
     """Called from main loop each frame. Fires long-press when 2s hold detected."""
     global _hold_start_time, _hold_consumed
+    # Ignore holds for the first 15s after startup — prevents phantom FT6236
+    # boot events from triggering the exit dialog before any real touch.
+    if time.time() - _service_start_time < 15.0:
+        _hold_start_time = 0.0
+        return
     if _hold_start_time > 0 and not _hold_consumed:
         if time.time() - _hold_start_time >= 2.0:
             _hold_consumed = True
@@ -1343,7 +1349,8 @@ def main():
     interval = 1.0 / FPS
     print(f"Tokyo Train Ticker running → {FB_DEV}  ({SCREEN_W}x{SCREEN_H})")
 
-    global _last_tap_pos, _last_tap_time
+    global _last_tap_pos, _last_tap_time, _service_start_time
+    _service_start_time = time.time()
 
     while True:
         t0 = time.time()
