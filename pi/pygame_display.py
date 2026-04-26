@@ -1075,12 +1075,14 @@ def finish_calibration():
     global _calibration_mode, _calib
     taps = state["calib_taps"]
     (rx1,ry1),(rx2,ry2),(rx3,ry3),(rx4,ry4) = taps   # TL, TR, BR, BL
+    print(f"Calib raw taps: TL=({rx1},{ry1}) TR=({rx2},{ry2}) BR=({rx3},{ry3}) BL=({rx4},{ry4})", flush=True)
     tx_l, tx_r = _CALIB_TARGETS[0][0], _CALIB_TARGETS[1][0]   # screen_x: 30, 290
     ty_t, ty_b = _CALIB_TARGETS[0][1], _CALIB_TARGETS[2][1]   # screen_y: 30, 210
     # ABS_Y (ry) → screen_x: group left/right taps by ry
     avg_ry_l = (ry1 + ry4) / 2;  avg_ry_r = (ry2 + ry3) / 2
     # ABS_X (rx, inverted) → screen_y: group top/bottom taps by rx
     avg_rx_t = (rx1 + rx2) / 2;  avg_rx_b = (rx3 + rx4) / 2
+    print(f"Calib avgs: ry_l={avg_ry_l:.0f} ry_r={avg_ry_r:.0f} rx_t={avg_rx_t:.0f} rx_b={avg_rx_b:.0f}", flush=True)
     sx_scale  = (tx_r - tx_l) / (avg_ry_r - avg_ry_l)
     sx_offset = tx_l - avg_ry_l * sx_scale
     sy_scale  = (ty_b - ty_t) / (avg_rx_b - avg_rx_t)
@@ -1088,7 +1090,7 @@ def finish_calibration():
     _calib = dict(sx_scale=sx_scale, sx_offset=sx_offset,
                   sy_scale=sy_scale, sy_offset=sy_offset)
     save_calibration()
-    print(f"Calibration: sx={sx_scale:.3f}+{sx_offset:.1f}  sy={sy_scale:.3f}+{sy_offset:.1f}")
+    print(f"Calibration: sx={sx_scale:.3f}+{sx_offset:.1f}  sy={sy_scale:.3f}+{sy_offset:.1f}", flush=True)
     _calibration_mode = False
 
 def process_calib_tap(rx, ry):
