@@ -37,31 +37,43 @@ BRIGHT_FULL    = 128
 BRIGHT_DIM     = 15
 DIM_AFTER      = 120   # seconds idle before dimming
 
-_pi_handle             = None
+_PWM_CHIP      = "/sys/class/pwm/pwmchip0"
+_PWM_PERIOD_NS = 1_000_000   # 1 kHz
+
+_backlight_ok          = False
 _last_activity: float  = 0.0
 _is_dimmed: bool       = False
 
 def _init_backlight():
-    global _pi_handle
+    global _backlight_ok
     try:
-        import lgpio
-        h = lgpio.gpiochip_open(0)
-        lgpio.gpio_claim_output(h, BACKLIGHT_GPIO)
-        lgpio.tx_pwm(h, BACKLIGHT_GPIO, 1000, 100)
-        _pi_handle = ("lgpio", h)
-        print("Backlight: lgpio OK")
+        if not os.path.exists(f"{_PWM_CHIP}/pwm0"):
+            with open(f"{_PWM_CHIP}/export", "w") as f:
+                f.write("0")
+            time.sleep(0.15)
+        with open(f"{_PWM_CHIP}/pwm0/period", "w") as f:
+            f.write(str(_PWM_PERIOD_NS))
+        # set duty before enabling to avoid a glitch
+        duty = round(BRIGHT_FULL * _PWM_PERIOD_NS / 255)
+        with open(f"{_PWM_CHIP}/pwm0/duty_cycle", "w") as f:
+            f.write(str(duty))
+        with open(f"{_PWM_CHIP}/pwm0/enable", "w") as f:
+            f.write("1")
+        _backlight_ok = True
+        print("Backlight: sysfs hardware PWM OK")
     except Exception as e:
-        print(f"Backlight init: {e} — install: sudo apt install python3-lgpio")
+        print(f"Backlight init: {e} — add 'dtoverlay=pwm' to /boot/firmware/config.txt and reboot")
 
 def set_backlight(level: int):
     global _is_dimmed
-    if _pi_handle is None:
+    if not _backlight_ok:
         return
-    kind, h = _pi_handle
-    pct = round(max(0, min(255, level)) * 100 / 255)
-    if kind == "lgpio":
-        import lgpio
-        lgpio.tx_pwm(h, BACKLIGHT_GPIO, 1000, pct)
+    duty = round(max(0, min(255, level)) * _PWM_PERIOD_NS / 255)
+    try:
+        with open(f"{_PWM_CHIP}/pwm0/duty_cycle", "w") as f:
+            f.write(str(duty))
+    except Exception as e:
+        print(f"Backlight set error: {e}")
     _is_dimmed = (level < BRIGHT_FULL)
 
 def wake_backlight():
@@ -71,7 +83,7 @@ def wake_backlight():
         set_backlight(BRIGHT_FULL)
 
 def check_backlight():
-    if _pi_handle is None or _is_dimmed:
+    if not _backlight_ok or _is_dimmed:
         return
     if time.time() - _last_activity > DIM_AFTER:
         set_backlight(BRIGHT_DIM)
