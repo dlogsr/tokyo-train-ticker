@@ -1105,9 +1105,9 @@ def process_calib_tap(rx, ry):
 def check_hold():
     """Called from main loop each frame. Fires long-press when 2s hold detected."""
     global _hold_start_time, _hold_consumed
-    # Ignore holds for the first 15s after startup — prevents phantom FT6236
-    # boot events from triggering the exit dialog before any real touch.
-    if time.time() - _service_start_time < 15.0:
+    # Ignore holds for the first 30s after startup — prevents phantom FT6236
+    # boot events from triggering actions before any real touch.
+    if time.time() - _service_start_time < 30.0:
         _hold_start_time = 0.0
         return
     if _hold_start_time > 0 and not _hold_consumed:
@@ -1152,8 +1152,8 @@ def process_long_press(x, y):
                 _calibration_mode = False
             else:
                 start_calibration()
-        else:                             # STN or LINE → exit confirm
-            state["confirm_exit"] = True
+        # STN/LINE hold-exit disabled — phantom FT6236 events trigger it
+        # accidentally. Stop via: sudo systemctl stop train-display.service
 
 def process_touch(x, y):
     # Exit confirmation overlay takes priority
