@@ -398,7 +398,41 @@ def draw_dest(draw, x, y, dest_en, font_en, color, max_w):
         max_w -= text_w(draw, ja, f_ja) + 3
     draw_text(draw, x, y, dest_en, font_en, color, max_w)
 
-# ── Operator logo drawing ─────────────────────────────────────────────────────
+# ── Operator logo images ──────────────────────────────────────────────────────
+
+_OPERATOR_LOGO_FILES = {
+    'JR-East':    'jr-east.png',
+    'TokyoMetro': 'tokyo-metro.png',
+    'Tokyu':      'tokyu.png',
+    'Tobu':       'tobu.png',
+    'Seibu':      'seibu.png',
+    'Odakyu':     'odakyu.png',
+    'Keio':       'keio.png',
+    'Keisei':     'keisei.png',
+    'Keikyu':     'keikyu.png',
+}
+
+_op_logos = {}  # operator key -> PIL Image sized for the Pi icon strip
+
+def _load_operator_logos():
+    logo_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            '..', 'frontend', 'logos')
+    iw, ih = 62, 16
+    for operator, fname in _OPERATOR_LOGO_FILES.items():
+        path = os.path.join(logo_dir, fname)
+        try:
+            raw = Image.open(path).convert('RGB')
+            ow, oh = raw.size
+            scale = min(iw / ow, ih / oh)
+            nw, nh = round(ow * scale), round(oh * scale)
+            resized = raw.resize((nw, nh), Image.LANCZOS)
+            icon = Image.new('RGB', (iw, ih), (255, 255, 255))
+            icon.paste(resized, ((iw - nw) // 2, (ih - nh) // 2))
+            _op_logos[operator] = icon
+        except Exception as e:
+            print(f"Logo load failed ({fname}): {e}")
+
+# ── Operator logo drawing (fallback geometric, used when PNG unavailable) ─────
 
 def _logo_bg(draw, bx, by, size, color, radius=None):
     if radius is None:
@@ -525,7 +559,7 @@ def draw_header(draw):
     cw = text_w(draw, clk, f_clk)
     draw.text((SCREEN_W - cw - 4, 6), clk, font=f_clk, fill=(70, 70, 70))
 
-def draw_hero_card(draw):
+def draw_hero_card(draw, img):
     trains  = state["station_trains"]
     pf      = state["platform_filter"]
     visible = [t for t in trains if pf == "ALL" or str(t.get("platform","")) == pf]
@@ -546,11 +580,34 @@ def draw_hero_card(draw):
     line_obj = next((l for l in state["all_lines"] if l["code"] == code), {})
     operator = line_obj.get("operator", "")
 
-    badge_size = 68
-    bx = (100 - badge_size) // 2
-    by = HERO_TOP + (88 - badge_size) // 2
-    draw_operator_logo(draw, bx, by, badge_size, operator, code,
-                       train.get("color", "#888888"), train.get("text_color", "#000000"))
+    # Primary: colored line-code badge (matches web #next-badge)
+    badge_size = 60
+    bx = (100 - badge_size) // 2   # = 20
+    by = HERO_TOP + 4
+    rgb_bg = color
+    rgb_fg = hex_to_rgb(train.get("text_color", "#ffffff"))
+    if shape == "circle":
+        r = badge_size // 2
+        draw.ellipse([bx, by, bx + badge_size, by + badge_size], fill=rgb_bg)
+    elif shape == "square":
+        draw.rectangle([bx, by, bx + badge_size, by + badge_size], fill=rgb_bg)
+    else:
+        draw.rounded_rectangle([bx, by, bx + badge_size, by + badge_size],
+                                radius=max(4, badge_size // 8), fill=rgb_bg)
+    f_code = get_font("hero")
+    lw = text_w(draw, code, f_code)
+    draw.text((bx + (badge_size - lw) // 2, by + (badge_size - f_code.size) // 2),
+              code, font=f_code, fill=rgb_fg)
+
+    # Secondary: operator logo image below badge (or fallback geometric)
+    logo_y = by + badge_size + 2
+    if operator in _op_logos:
+        logo_img = _op_logos[operator]
+        lw_logo, lh_logo = logo_img.size
+        img.paste(logo_img, (bx + (badge_size - lw_logo) // 2, logo_y))
+    else:
+        draw_operator_logo(draw, bx, logo_y, 20, operator, code,
+                           train.get("color", "#888888"), train.get("text_color", "#000000"))
 
     rx = 104
     line_name    = line_obj.get("name", code)
@@ -1317,6 +1374,7 @@ def run_calibration():
 # ── Main loop ─────────────────────────────────────────────────────────────────
 def main():
     _ensure_cjk_font()
+    _load_operator_logos()
 
     if "--calibrate" in sys.argv:
         run_calibration()
@@ -1373,7 +1431,7 @@ def main():
             elif state["picker_open"]:
                 draw_picker(draw)
             elif state["mode"] == "station":
-                draw_hero_card(draw)
+                draw_hero_card(draw, img)
                 plt_bottom = draw_platform_strip(draw)
                 draw_upcoming_list(draw, plt_bottom)
             else:
