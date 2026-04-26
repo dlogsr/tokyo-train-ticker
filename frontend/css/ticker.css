@@ -53,14 +53,14 @@ html, body {
 
 .station-ja {
   font-family: 'Noto Sans JP', sans-serif;
-  font-size: 10px;
+  font-size: 13px;
   color: #666;
   margin-right: 4px;
 }
 
 .station-en {
-  font-family: 'Press Start 2P', monospace;
-  font-size: 7px;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-size: 13px;
   color: #ddd;
   letter-spacing: 0px;
   text-shadow: 0 0 6px rgba(255,255,255,0.4);
@@ -72,7 +72,7 @@ html, body {
 
 #clock {
   font-family: 'VT323', 'Share Tech Mono', monospace;
-  font-size: 10px;
+  font-size: 13px;
   color: #555;
   letter-spacing: 0.5px;
   white-space: nowrap;
@@ -126,8 +126,8 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Press Start 2P', monospace;
-  font-size: 18px;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-size: 28px;
   color: #000;
   /* shape + background set inline via JS */
   transition: background 0.3s, box-shadow 0.3s;
@@ -157,7 +157,7 @@ html, body {
 
 #next-line-name {
   font-family: 'VT323', 'Share Tech Mono', monospace;
-  font-size: 9px;
+  font-size: 12px;
   color: #555;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -169,13 +169,13 @@ html, body {
 
 .line-name-ja {
   font-family: 'Noto Sans JP', sans-serif;
-  font-size: 9px;
+  font-size: 11px;
   color: #82691f;
   flex-shrink: 0;
 }
 
 .line-name-en {
-  font-size: 9px;
+  font-size: 11px;
   color: #3a3a3a;
   flex-shrink: 0;
 }
@@ -199,15 +199,15 @@ html, body {
 
 .car-count {
   font-family: 'VT323', 'Share Tech Mono', monospace;
-  font-size: 7px;
+  font-size: 10px;
   color: #2a2a2a;
   margin-left: 2px;
 }
 
 #next-dest {
-  font-family: 'Press Start 2P', monospace;
-  font-size: 11px;
-  line-height: 1.4;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-size: 16px;
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -219,7 +219,7 @@ html, body {
 /* Kanji destination prefix in hero card */
 .dest-ja {
   font-family: 'Noto Sans JP', sans-serif;
-  font-size: 11px;
+  font-size: 13px;
   color: #967830;
   flex-shrink: 0;
 }
@@ -227,7 +227,7 @@ html, body {
 /* Kanji destination prefix in list rows */
 .dest-ja-row {
   font-family: 'Noto Sans JP', sans-serif;
-  font-size: 9px;
+  font-size: 11px;
   color: #6b521a;
   margin-right: 2px;
 }
@@ -239,20 +239,20 @@ html, body {
 }
 
 #next-eta {
-  font-family: 'Press Start 2P', monospace;
-  font-size: 18px;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-size: 28px;
   /* color set inline */
 }
 
 #next-delay {
   font-family: 'VT323', 'Share Tech Mono', monospace;
-  font-size: 9px;
+  font-size: 12px;
   color: #e87722;
 }
 
 #next-platform {
   font-family: 'VT323', 'Share Tech Mono', monospace;
-  font-size: 9px;
+  font-size: 12px;
   color: #444;
   letter-spacing: 0.3px;
 }
@@ -264,7 +264,6 @@ html, body {
 }
 .eta-arriving { animation: led-blink 0.7s ease-in-out infinite; }
 
-/* ── Platform filter strip ──────────────────────────────────────────────── */
 /* ── Platform popup ─────────────────────────────────────────────────────── */
 #plt-trigger {
   cursor: pointer;
@@ -289,7 +288,7 @@ html, body {
 
 .plt-btn {
   font-family: 'VT323', 'Share Tech Mono', monospace;
-  font-size: 11px;
+  font-size: 14px;
   background: transparent;
   border: none;
   color: #555;
@@ -307,7 +306,7 @@ html, body {
 .upcoming-head {
   display: flex;
   align-items: center;
-  height: 13px;
+  height: 14px;
   padding: 0 4px;
   background: rgba(0,0,0,0.8);
   border-bottom: 1px solid #161616;
@@ -315,8 +314,8 @@ html, body {
   position: relative;
 }
 .upcoming-head span {
-  font-family: 'Press Start 2P', monospace;
-  font-size: 6px;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-size: 11px;
   color: #333;
   letter-spacing: 0.3px;
 }
@@ -337,7 +336,7 @@ html, body {
 .board-row {
   display: flex;
   align-items: center;
-  height: 17px;
+  height: 19px;
   padding: 0 4px 0 2px;
   border-bottom: 1px solid #0e0e0e;
   /* border-left color set inline by JS */
@@ -348,7 +347,7 @@ html, body {
 
 .train-row .col-dest {
   font-family: 'VT323', 'Share Tech Mono', monospace;
-  font-size: 9px;
+  font-size: 13px;
   font-weight: bold;
   white-space: nowrap;
   overflow: hidden;
@@ -360,14 +359,14 @@ html, body {
 /* tracker kanji dest */
 .tracker-dest-ja {
   font-family: 'Noto Sans JP', sans-serif;
-  font-size: 9px;
+  font-size: 11px;
   color: #7a5c1a;
   margin-right: 3px;
 }
 
 .col-time .time-val {
-  font-family: 'Press Start 2P', monospace;
-  font-size: 8px;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-size: 13px;
 }
 .time-val.arriving { color: #ff6020; text-shadow: 0 0 8px #ff6020; }
 .time-val.soon     { color: #ffd700; text-shadow: 0 0 6px #ffd70080; }
@@ -378,15 +377,15 @@ html, body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Press Start 2P', monospace;
-  font-size: 6px;
-  height: 11px;
-  min-width: 16px;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-size: 11px;
+  height: 13px;
+  min-width: 18px;
   padding: 0 2px;
   vertical-align: middle;
 }
 .inline-badge.shape-square { border-radius: 1px; }
-.inline-badge.shape-circle { border-radius: 50%; width: 11px; min-width: 11px; }
+.inline-badge.shape-circle { border-radius: 50%; width: 13px; min-width: 13px; }
 .inline-badge.shape-rect   { border-radius: 2px; }
 
 .delay-dot {
@@ -403,14 +402,14 @@ html, body {
 .time-divider {
   display: flex;
   align-items: center;
-  height: 11px;
+  height: 12px;
   padding: 0 4px;
   background: transparent;
   gap: 4px;
 }
 .time-divider-label {
-  font-family: 'Press Start 2P', monospace;
-  font-size: 5px;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-size: 10px;
   color: #2a2a2a;
   letter-spacing: 0.5px;
   white-space: nowrap;
@@ -418,8 +417,8 @@ html, body {
 .time-divider-line { flex: 1; height: 1px; background: #161616; }
 
 #no-trains {
-  font-family: 'Press Start 2P', monospace;
-  font-size: 7px;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-size: 11px;
   color: #333;
   text-align: center;
   margin-top: 16px;
@@ -436,7 +435,7 @@ html, body {
   padding: 0 6px;
   background: rgba(0,0,0,0.8);
   border-bottom: 1px solid #1a1a1a;
-  font-size: 10px;
+  font-size: 13px;
   color: #ccc;
   gap: 6px;
   flex-shrink: 0;
@@ -459,20 +458,20 @@ html, body {
   gap: 5px;
   margin-bottom: 4px;
 }
-.tracker-train-num { font-size: 8px; color: #555; font-family: 'VT323', 'Share Tech Mono', monospace; }
+.tracker-train-num { font-size: 11px; color: #555; font-family: 'VT323', 'Share Tech Mono', monospace; }
 .tracker-dest {
-  font-family: 'Press Start 2P', monospace;
-  font-size: 8px;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-size: 13px;
   flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.tracker-delay { font-size: 8px; color: #e87722; font-family: 'VT323', 'Share Tech Mono', monospace; }
+.tracker-delay { font-size: 11px; color: #e87722; font-family: 'VT323', 'Share Tech Mono', monospace; }
 
 .station-progress { display: flex; align-items: center; }
-.prog-station { font-size: 7px; color: #3a3a3a; white-space: nowrap; overflow: hidden; max-width: 52px; text-align: center; font-family: 'VT323', 'Share Tech Mono', monospace; }
-.prog-station.current { color: #ddd; font-size: 7.5px; text-shadow: 0 0 6px rgba(255,255,255,0.3); }
+.prog-station { font-size: 9px; color: #3a3a3a; white-space: nowrap; overflow: hidden; max-width: 52px; text-align: center; font-family: 'VT323', 'Share Tech Mono', monospace; }
+.prog-station.current { color: #ddd; font-size: 10px; text-shadow: 0 0 6px rgba(255,255,255,0.3); }
 .prog-station.next { color: #888; }
 .prog-dot { width: 4px; height: 4px; border-radius: 50%; background: #2a2a2a; flex-shrink: 0; margin: 0 1px; }
 .prog-dot.current { width: 6px; height: 6px; }
@@ -491,8 +490,8 @@ html, body {
 .overlay.hidden { display: none; }
 
 .overlay-title {
-  font-family: 'Press Start 2P', monospace;
-  font-size: 7px;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-size: 11px;
   color: #444;
   letter-spacing: 0.5px;
   padding: 6px 6px 4px;
@@ -505,7 +504,7 @@ html, body {
   border-bottom: 1px solid #1e1e1e;
   color: #ddd;
   font-family: 'VT323', 'Share Tech Mono', monospace;
-  font-size: 11px;
+  font-size: 14px;
   padding: 5px 6px;
   outline: none;
   width: 100%;
@@ -516,7 +515,7 @@ html, body {
 
 .picker-item {
   padding: 5px 6px;
-  font-size: 10px;
+  font-size: 13px;
   cursor: pointer;
   border-bottom: 1px solid #0e0e0e;
   display: flex;
@@ -525,7 +524,7 @@ html, body {
   font-family: 'VT323', 'Share Tech Mono', monospace;
 }
 .picker-item:hover, .picker-item:active { background: rgba(255,255,255,0.05); }
-.picker-item .item-ja { font-family: 'Noto Sans JP', sans-serif; font-size: 9px; color: #555; }
+.picker-item .item-ja { font-family: 'Noto Sans JP', sans-serif; font-size: 11px; color: #555; }
 .picker-line-badges { display: flex; gap: 2px; margin-left: auto; }
 
 #line-results {
@@ -550,14 +549,14 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Press Start 2P', monospace;
-  font-size: 8px;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-size: 13px;
   width: 28px;
   height: 20px;
 }
 .line-picker-item .lp-code {
-  font-family: 'Press Start 2P', monospace;
-  font-size: 5px;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-size: 9px;
   color: #555;
   text-align: center;
 }
@@ -578,13 +577,13 @@ html, body {
   background: transparent;
   border: 1px solid #1e1e1e;
   color: #444;
-  font-family: 'Press Start 2P', monospace;
-  font-size: 6px;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-size: 11px;
   padding: 2px 6px;
   cursor: pointer;
   border-radius: 1px;
   letter-spacing: 0.3px;
-  height: 13px;
+  height: 14px;
   display: flex;
   align-items: center;
   transition: all 0.1s;
@@ -600,8 +599,8 @@ html, body {
 
 .demo-badge {
   margin-left: auto;
-  font-family: 'Press Start 2P', monospace;
-  font-size: 5px;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-size: 9px;
   color: #443300;
   border: 1px solid #332200;
   padding: 2px 4px;
@@ -617,12 +616,12 @@ html, body {
   border: 1px solid #181818;
   width: 320px;
   font-family: 'VT323', 'Share Tech Mono', monospace;
-  font-size: 11px;
+  font-size: 13px;
   color: #888;
 }
 .dev-label {
-  font-family: 'Press Start 2P', monospace;
-  font-size: 7px;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-size: 11px;
   letter-spacing: 0.5px;
   color: #333;
   margin-bottom: 8px;
@@ -635,7 +634,7 @@ html, body {
   border: 1px solid #1e1e1e;
   color: #888;
   font-family: inherit;
-  font-size: 10px;
+  font-size: 12px;
   padding: 2px 5px;
   cursor: pointer;
 }

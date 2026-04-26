@@ -202,7 +202,7 @@ def _load_font(size):
 fonts = {}
 def get_font(key):
     if key not in fonts:
-        sizes = {"xs": 10, "sm": 12, "md": 14, "lg": 18, "xl": 24, "hero": 30}
+        sizes = {"xs": 13, "sm": 16, "md": 19, "lg": 23, "xl": 30, "hero": 40}
         fonts[key] = _load_font(sizes.get(key, 12))
     return fonts[key]
 
