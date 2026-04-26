@@ -953,8 +953,7 @@ def find_touch_device():
     return None
 
 # FT6236 axis mapping for PiTFT 2.8" landscape:
-#   ABS_Y (ry, inverted) → screen X    ABS_X → screen Y
-# i.e. axes are swapped with ry inverted — equivalent to mirror-V then 90°CCW.
+#   axes swapped + both inverted (180° rotation of the swapped result)
 _touch_x_max = SCREEN_W - 1   # 319
 _touch_y_max = SCREEN_H - 1   # 239
 
@@ -963,8 +962,8 @@ def _map_touch(rx, ry, xmax, ymax):
         sx = round(_calib["sx_scale"] * rx + _calib["sx_offset"])
         sy = round(_calib["sy_scale"] * ry + _calib["sy_offset"])
     else:
-        sx = round((ymax - ry) * (SCREEN_W - 1) / ymax)   # ABS_Y inverted → X
-        sy = round(rx * (SCREEN_H - 1) / xmax)             # ABS_X → Y
+        sx = round(ry * (SCREEN_W - 1) / ymax)              # ABS_Y → X
+        sy = round((xmax - rx) * (SCREEN_H - 1) / xmax)     # ABS_X inverted → Y
     return max(0, min(SCREEN_W - 1, sx)), max(0, min(SCREEN_H - 1, sy))
 
 def _read_abs_max(event_dev, axis_code):
