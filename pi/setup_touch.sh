@@ -8,7 +8,7 @@ set -e
 
 echo "=== PiTFT touch setup ==="
 
-apt-get install -y tslib
+apt-get install -y libts-bin libts0
 
 # Find the touch input device by scanning sysfs names
 TOUCH_DEV=$(python3 - <<'PYEOF'
