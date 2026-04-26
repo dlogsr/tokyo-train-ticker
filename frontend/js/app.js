@@ -72,8 +72,7 @@ const CARS = {
   "KS":8,"KE":8,"MM":6,"SR":6,"RI":10,
 };
 
-// ── Operator logo images ───────────────────────────────────────────────────────
-// Real logo PNGs cropped from reference; SVG fallback for operators without one.
+// ── Operator icon (small secondary image below line badge) ────────────────────
 const OPERATOR_LOGO_IMG = {
   'JR-East':    '/logos/jr-east.png',
   'TokyoMetro': '/logos/tokyo-metro.png',
@@ -86,28 +85,9 @@ const OPERATOR_LOGO_IMG = {
   'Keikyu':     '/logos/keikyu.png',
 };
 
-function operatorLogoHTML(operator, code, color, textColor) {
-  const imgSrc = OPERATOR_LOGO_IMG[operator];
-  if (imgSrc) {
-    return `<img src="${imgSrc}" class="op-logo op-logo-img" alt="${operator}">`;
-  }
-
-  // SVG fallback for Toei and generic operators
-  if (operator === 'Toei') {
-    return `<svg viewBox="0 0 68 68" class="op-logo">
-      <rect width="68" height="68" rx="5" fill="#00a04a"/>
-      <path d="M34,57 L-6,43 A42,42 0 0,1 74,43 Z" fill="white"/>
-      <rect x="28" y="10" width="12" height="47" fill="#00a04a"/>
-      <rect x="32" y="55" width="4" height="12" fill="white"/>
-      <text x="34" y="10" font-size="9" fill="#c8ffc8" text-anchor="middle" font-family="monospace">${code}</text>
-    </svg>`;
-  }
-
-  const fs = code.length > 2 ? '18' : '24';
-  return `<svg viewBox="0 0 68 68" class="op-logo">
-    <rect width="68" height="68" rx="5" fill="${color}"/>
-    <text x="34" y="38" font-size="${fs}" fill="${textColor}" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-weight="bold">${code}</text>
-  </svg>`;
+function operatorIconHTML(operator) {
+  const src = OPERATOR_LOGO_IMG[operator];
+  return src ? `<img src="${src}" class="op-icon" alt="${operator}">` : '';
 }
 
 function carDiagramHTML(code, color) {
@@ -297,8 +277,19 @@ const app = (() => {
     const operator = line.operator || '';
     const bright = brighten(train.color);
 
-    // Operator logo
-    badgeWrap.innerHTML = operatorLogoHTML(operator, train.line_code, train.color, train.text_color);
+    // Line badge (primary) + small operator icon (secondary)
+    const shape = train.shape || line.shape || 'rect';
+    const br = shape === 'circle' ? '50%' : shape === 'square' ? '4px' : '8px';
+    const glow = `0 0 16px ${train.color}99, 0 0 32px ${train.color}44`;
+    const badge = document.getElementById('next-badge');
+    badge.textContent = train.line_code;
+    badge.style.cssText = `background:${train.color};color:${train.text_color};border-radius:${br};box-shadow:${glow};`;
+
+    // Swap out any old op-icon, add new one
+    const oldIcon = badgeWrap.querySelector('.op-icon');
+    if (oldIcon) oldIcon.remove();
+    const iconHtml = operatorIconHTML(operator);
+    if (iconHtml) badgeWrap.insertAdjacentHTML('beforeend', iconHtml);
 
     // Line name row: kanji + english + car diagram (right-aligned)
     const lineJa = LINE_NAME_JA[train.line_code] || '';

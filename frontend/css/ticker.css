@@ -106,43 +106,40 @@ html, body {
   flex-shrink: 0;
 }
 
-/* Left column — large line badge */
+/* Left column — line badge + small operator icon */
 #next-badge-wrap {
   width: 100px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  padding: 8px;
+  gap: 5px;
+  padding: 6px;
 }
 
 #next-badge {
-  width: 78px;
-  height: 78px;
+  width: 68px;
+  height: 68px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: 'Press Start 2P', monospace;
-  font-size: 20px;
+  font-size: 18px;
   color: #000;
-  /* shape set inline via JS */
+  /* shape + background set inline via JS */
   transition: background 0.3s, box-shadow 0.3s;
-  position: relative;
 }
 
-/* Operator logo — SVG drawn or real image */
-.op-logo {
-  width: 78px;
-  height: 78px;
-  display: block;
-  flex-shrink: 0;
-}
-
-.op-logo-img {
+/* Operator icon — small secondary image below the line badge */
+.op-icon {
+  width: 28px;
+  height: 18px;
   object-fit: contain;
   background: white;
-  border-radius: 6px;
-  padding: 6px;
+  border-radius: 3px;
+  display: block;
+  flex-shrink: 0;
 }
 
 /* Right column — train info */
