@@ -1,7 +1,6 @@
 [Unit]
 Description=Tokyo Train Ticker Display
 After=train-backend.service
-Wants=train-backend.service
 
 [Service]
 Type=simple
