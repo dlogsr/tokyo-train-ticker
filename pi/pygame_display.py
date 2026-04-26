@@ -1117,30 +1117,16 @@ def check_hold():
             process_long_press(*_hold_pos)
 
 def draw_tap_indicator(draw):
-    """Fading ripple + raw-value debug label at the last tap position."""
     if _last_tap_pos is None:
         return
     elapsed = time.time() - _last_tap_time
-    if elapsed > 2.0:
+    if elapsed > 0.35:
         return
     tx, ty = _last_tap_pos
     frac = min(1.0, elapsed / 0.35)
-    if elapsed < 0.35:
-        r = int(6 + 10 * frac)
-        alpha = int(200 * (1.0 - frac))
-        color = (alpha, alpha, alpha)
-        draw.ellipse([tx - r, ty - r, tx + r, ty + r], outline=color)
-    # Raw value label — fades after 2s, useful for dialing in axis mapping
-    label_alpha = max(0, int(180 * (1.0 - elapsed / 2.0)))
-    if label_alpha > 10:
-        rx0, ry0 = _last_raw
-        label = f"raw({rx0},{ry0}) → ({tx},{ty})"
-        f_xs = get_font("xs")
-        lw = text_w(draw, label, f_xs)
-        lx = max(2, min(SCREEN_W - lw - 2, tx - lw // 2))
-        ly = max(2, ty - 18) if ty > 20 else ty + 8
-        col = (label_alpha, label_alpha, label_alpha)
-        draw.text((lx, ly), label, font=f_xs, fill=col)
+    r = int(6 + 10 * frac)
+    alpha = int(200 * (1.0 - frac))
+    draw.ellipse([tx - r, ty - r, tx + r, ty + r], outline=(alpha, alpha, alpha))
 
 def process_long_press(x, y):
     global _calibration_mode
@@ -1353,51 +1339,55 @@ def main():
     _service_start_time = time.time()
 
     while True:
-        t0 = time.time()
+        try:
+            t0 = time.time()
 
-        check_hold()   # fires long-press at exactly 2s while finger is still down
+            check_hold()
 
-        while not _touch_q.empty():
-            try:
-                event = _touch_q.get_nowait()
-                if event[0] == "raw_tap" and state["calibrating"]:
-                    process_calib_tap(event[1], event[2])
-                elif event[0] == "tap":
-                    _last_tap_pos = (event[1], event[2])
-                    _last_tap_time = time.time()
-                    _last_raw = event[3] if len(event) > 3 else _last_raw
-                    process_touch(event[1], event[2])
-                elif event[0] == "scroll":
-                    process_scroll(event[1])
-                # long_tap removed — hold detection now handled by check_hold()
-            except Exception as e:
-                print(f"touch event error: {e}")
+            while not _touch_q.empty():
+                try:
+                    event = _touch_q.get_nowait()
+                    if event[0] == "raw_tap" and state["calibrating"]:
+                        process_calib_tap(event[1], event[2])
+                    elif event[0] == "tap":
+                        _last_tap_pos = (event[1], event[2])
+                        _last_tap_time = time.time()
+                        _last_raw = event[3] if len(event) > 3 else _last_raw
+                        process_touch(event[1], event[2])
+                    elif event[0] == "scroll":
+                        process_scroll(event[1])
+                except Exception as e:
+                    print(f"touch event error: {e}", flush=True)
 
-        img  = Image.new("RGB", (SCREEN_W, SCREEN_H), BLACK)
-        draw = ImageDraw.Draw(img)
+            img  = Image.new("RGB", (SCREEN_W, SCREEN_H), BLACK)
+            draw = ImageDraw.Draw(img)
 
-        draw_header(draw)
+            draw_header(draw)
 
-        if state["calibrating"]:
-            draw_calibration(draw)
-        elif state["confirm_exit"]:
-            draw_exit_confirm(draw)
-        elif state["picker_open"]:
-            draw_picker(draw)
-        elif state["mode"] == "station":
-            draw_hero_card(draw)
-            plt_bottom = draw_platform_strip(draw)
-            draw_upcoming_list(draw, plt_bottom)
-        else:
-            draw_line_tracker(draw)
+            if state["calibrating"]:
+                draw_calibration(draw)
+            elif state["confirm_exit"]:
+                draw_exit_confirm(draw)
+            elif state["picker_open"]:
+                draw_picker(draw)
+            elif state["mode"] == "station":
+                draw_hero_card(draw)
+                plt_bottom = draw_platform_strip(draw)
+                draw_upcoming_list(draw, plt_bottom)
+            else:
+                draw_line_tracker(draw)
 
-        draw_footer(draw)
-        draw_tap_indicator(draw)
+            draw_footer(draw)
+            draw_tap_indicator(draw)
 
-        flush(img)
+            flush(img)
 
-        elapsed = time.time() - t0
-        time.sleep(max(0, interval - elapsed))
+            elapsed = time.time() - t0
+            time.sleep(max(0, interval - elapsed))
+
+        except Exception as e:
+            print(f"Main loop error: {e}", flush=True)
+            time.sleep(0.5)
 
 
 if __name__ == "__main__":
