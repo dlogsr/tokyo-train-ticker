@@ -2,13 +2,15 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 @font-face {
-  font-family: 'DSEG14Mini';
-  src: url('/fonts/DSEG14ClassicMini-Regular.ttf') format('truetype');
+  font-family: 'B612Mono';
+  src: url('/fonts/B612Mono-Bold.ttf') format('truetype');
+  font-weight: bold;
   font-display: swap;
 }
 @font-face {
-  font-family: 'DSEG7Mini';
-  src: url('/fonts/DSEG7ClassicMini-Regular.ttf') format('truetype');
+  font-family: 'B612Mono';
+  src: url('/fonts/B612Mono-Regular.ttf') format('truetype');
+  font-weight: normal;
   font-display: swap;
 }
 
@@ -18,7 +20,7 @@ html, body {
   flex-direction: column;
   align-items: center;
   min-height: 100vh;
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   color: #e0e0e0;
 }
 
@@ -63,7 +65,7 @@ html, body {
 }
 
 .station-en {
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 13px;
   color: #ddd;
   letter-spacing: 0px;
@@ -75,7 +77,7 @@ html, body {
 }
 
 #clock {
-  font-family: 'DSEG7Mini', 'DSEG14Mini', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 13px;
   color: #555;
   letter-spacing: 0.5px;
@@ -130,7 +132,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 28px;
   color: #000;
   /* shape + background set inline via JS */
@@ -160,7 +162,7 @@ html, body {
 }
 
 #next-line-name {
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 12px;
   color: #555;
   letter-spacing: 0.5px;
@@ -202,14 +204,14 @@ html, body {
 }
 
 .car-count {
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 10px;
   color: #2a2a2a;
   margin-left: 2px;
 }
 
 #next-dest {
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 16px;
   line-height: 1.2;
   white-space: nowrap;
@@ -243,19 +245,19 @@ html, body {
 }
 
 #next-eta {
-  font-family: 'DSEG7Mini', 'DSEG14Mini', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 28px;
   /* color set inline */
 }
 
 #next-delay {
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 12px;
   color: #e87722;
 }
 
 #next-platform {
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 12px;
   color: #444;
   letter-spacing: 0.3px;
@@ -291,7 +293,7 @@ html, body {
 #platform-buttons { display: flex; flex-direction: column; gap: 1px; }
 
 .plt-btn {
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 14px;
   background: transparent;
   border: none;
@@ -318,7 +320,7 @@ html, body {
   position: relative;
 }
 .upcoming-head span {
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 11px;
   color: #333;
   letter-spacing: 0.3px;
@@ -350,7 +352,7 @@ html, body {
 .train-row:nth-child(even) { background: rgba(255,255,255,0.01); }
 
 .train-row .col-dest {
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 13px;
   font-weight: bold;
   white-space: nowrap;
@@ -369,7 +371,7 @@ html, body {
 }
 
 .col-time .time-val {
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 13px;
 }
 .time-val.arriving { color: #ff6020; text-shadow: 0 0 8px #ff6020; }
@@ -381,7 +383,7 @@ html, body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 11px;
   height: 13px;
   min-width: 18px;
@@ -412,7 +414,7 @@ html, body {
   gap: 4px;
 }
 .time-divider-label {
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 10px;
   color: #2a2a2a;
   letter-spacing: 0.5px;
@@ -421,7 +423,7 @@ html, body {
 .time-divider-line { flex: 1; height: 1px; background: #161616; }
 
 #no-trains {
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 11px;
   color: #333;
   text-align: center;
@@ -462,19 +464,19 @@ html, body {
   gap: 5px;
   margin-bottom: 4px;
 }
-.tracker-train-num { font-size: 11px; color: #555; font-family: 'DSEG14Mini', 'Share Tech Mono', monospace; }
+.tracker-train-num { font-size: 11px; color: #555; font-family: 'B612Mono', 'Share Tech Mono', monospace; }
 .tracker-dest {
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 13px;
   flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.tracker-delay { font-size: 11px; color: #e87722; font-family: 'DSEG14Mini', 'Share Tech Mono', monospace; }
+.tracker-delay { font-size: 11px; color: #e87722; font-family: 'B612Mono', 'Share Tech Mono', monospace; }
 
 .station-progress { display: flex; align-items: center; }
-.prog-station { font-size: 9px; color: #3a3a3a; white-space: nowrap; overflow: hidden; max-width: 52px; text-align: center; font-family: 'DSEG14Mini', 'Share Tech Mono', monospace; }
+.prog-station { font-size: 9px; color: #3a3a3a; white-space: nowrap; overflow: hidden; max-width: 52px; text-align: center; font-family: 'B612Mono', 'Share Tech Mono', monospace; }
 .prog-station.current { color: #ddd; font-size: 10px; text-shadow: 0 0 6px rgba(255,255,255,0.3); }
 .prog-station.next { color: #888; }
 .prog-dot { width: 4px; height: 4px; border-radius: 50%; background: #2a2a2a; flex-shrink: 0; margin: 0 1px; }
@@ -494,7 +496,7 @@ html, body {
 .overlay.hidden { display: none; }
 
 .overlay-title {
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 11px;
   color: #444;
   letter-spacing: 0.5px;
@@ -507,7 +509,7 @@ html, body {
   border: none;
   border-bottom: 1px solid #1e1e1e;
   color: #ddd;
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 14px;
   padding: 5px 6px;
   outline: none;
@@ -525,7 +527,7 @@ html, body {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
 }
 .picker-item:hover, .picker-item:active { background: rgba(255,255,255,0.05); }
 .picker-item .item-ja { font-family: 'Noto Sans JP', sans-serif; font-size: 11px; color: #555; }
@@ -553,13 +555,13 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 13px;
   width: 28px;
   height: 20px;
 }
 .line-picker-item .lp-code {
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 9px;
   color: #555;
   text-align: center;
@@ -581,7 +583,7 @@ html, body {
   background: transparent;
   border: 1px solid #1e1e1e;
   color: #444;
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 11px;
   padding: 2px 6px;
   cursor: pointer;
@@ -603,7 +605,7 @@ html, body {
 
 .demo-badge {
   margin-left: auto;
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 9px;
   color: #443300;
   border: 1px solid #332200;
@@ -619,12 +621,12 @@ html, body {
   background: #0a0a0a;
   border: 1px solid #181818;
   width: 320px;
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 13px;
   color: #888;
 }
 .dev-label {
-  font-family: 'DSEG14Mini', 'Share Tech Mono', monospace;
+  font-family: 'B612Mono', 'Share Tech Mono', monospace;
   font-size: 11px;
   letter-spacing: 0.5px;
   color: #333;
