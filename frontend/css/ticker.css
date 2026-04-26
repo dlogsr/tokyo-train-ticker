@@ -130,12 +130,19 @@ html, body {
   position: relative;
 }
 
-/* Operator logo SVG (replaces the plain #next-badge) */
+/* Operator logo — SVG drawn or real image */
 .op-logo {
   width: 78px;
   height: 78px;
   display: block;
   flex-shrink: 0;
+}
+
+.op-logo-img {
+  object-fit: contain;
+  background: white;
+  border-radius: 6px;
+  padding: 6px;
 }
 
 /* Right column — train info */

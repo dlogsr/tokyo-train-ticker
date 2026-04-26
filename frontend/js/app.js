@@ -72,91 +72,42 @@ const CARS = {
   "KS":8,"KE":8,"MM":6,"SR":6,"RI":10,
 };
 
-// ── Operator logo SVGs ─────────────────────────────────────────────────────────
+// ── Operator logo images ───────────────────────────────────────────────────────
+// Real logo PNGs cropped from reference; SVG fallback for operators without one.
+const OPERATOR_LOGO_IMG = {
+  'JR-East':    '/logos/jr-east.png',
+  'TokyoMetro': '/logos/tokyo-metro.png',
+  'Tokyu':      '/logos/tokyu.png',
+  'Tobu':       '/logos/tobu.png',
+  'Seibu':      '/logos/seibu.png',
+  'Odakyu':     '/logos/odakyu.png',
+  'Keio':       '/logos/keio.png',
+  'Keisei':     '/logos/keisei.png',
+  'Keikyu':     '/logos/keikyu.png',
+};
+
 function operatorLogoHTML(operator, code, color, textColor) {
-  // 5-point star polygon for Tokyu, center (34,30), outer=22, inner=9
-  const star = "34,8 39.3,22.7 54.9,23.2 42.6,32.8 46.9,47.8 34,39 21.1,47.8 25.4,32.8 13.1,23.2 28.7,22.7";
-
-  switch (operator) {
-    case 'JR-East':
-      return `<svg viewBox="0 0 68 68" class="op-logo">
-        <rect width="68" height="68" rx="5" fill="#161616"/>
-        <circle cx="58" cy="10" r="5" fill="#c84614"/>
-        <text x="34" y="38" font-size="24" fill="#dcdcdc" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-weight="bold">JR</text>
-      </svg>`;
-
-    case 'TokyoMetro':
-      return `<svg viewBox="0 0 68 68" class="op-logo">
-        <rect width="68" height="68" rx="7" fill="#009de0"/>
-        <text x="34" y="44" font-size="28" fill="white" text-anchor="middle" dominant-baseline="middle" font-family="serif" font-weight="bold">M</text>
-        <circle cx="27" cy="15" r="4" fill="white"/>
-        <circle cx="41" cy="15" r="4" fill="white"/>
-        <text x="34" y="63" font-size="9" fill="#c8f0ff" text-anchor="middle" font-family="monospace">${code}</text>
-      </svg>`;
-
-    case 'Toei':
-      return `<svg viewBox="0 0 68 68" class="op-logo">
-        <rect width="68" height="68" rx="5" fill="#00a04a"/>
-        <path d="M34,57 L-6,43 A42,42 0 0,1 74,43 Z" fill="white"/>
-        <rect x="28" y="10" width="12" height="47" fill="#00a04a"/>
-        <rect x="32" y="55" width="4" height="12" fill="white"/>
-        <text x="34" y="10" font-size="9" fill="#c8ffc8" text-anchor="middle" font-family="monospace">${code}</text>
-      </svg>`;
-
-    case 'Tokyu':
-      return `<svg viewBox="0 0 68 68" class="op-logo">
-        <rect width="68" height="68" rx="5" fill="#e60012"/>
-        <polygon points="${star}" fill="white"/>
-      </svg>`;
-
-    case 'Tobu':
-      return `<svg viewBox="0 0 68 68" class="op-logo">
-        <rect width="68" height="68" rx="5" fill="#004190"/>
-        <text x="34" y="38" font-size="16" fill="white" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-weight="bold">TOBU</text>
-      </svg>`;
-
-    case 'Seibu':
-      return `<svg viewBox="0 0 68 68" class="op-logo">
-        <rect width="68" height="68" rx="4" fill="white"/>
-        <ellipse cx="26" cy="34" rx="22" ry="22" fill="#0071bc"/>
-        <ellipse cx="42" cy="34" rx="22" ry="22" fill="#00aadc"/>
-        <text x="34" y="38" font-size="22" fill="white" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-weight="bold">S</text>
-      </svg>`;
-
-    case 'Odakyu':
-      return `<svg viewBox="0 0 68 68" class="op-logo">
-        <rect width="68" height="68" rx="5" fill="#00adef"/>
-        <ellipse cx="40" cy="34" rx="17" ry="17" fill="white"/>
-        <polygon points="25,34 12,21 12,47" fill="white"/>
-      </svg>`;
-
-    case 'Keio':
-      return `<svg viewBox="0 0 68 68" class="op-logo">
-        <rect width="68" height="68" rx="5" fill="#001f62"/>
-        <text x="34" y="38" font-size="18" fill="white" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-weight="bold">KEIO</text>
-      </svg>`;
-
-    case 'Keikyu':
-      return `<svg viewBox="0 0 68 68" class="op-logo">
-        <rect width="68" height="68" rx="5" fill="#d3002f"/>
-        <text x="34" y="38" font-size="22" fill="white" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-weight="bold">KQ</text>
-      </svg>`;
-
-    case 'Keisei':
-      return `<svg viewBox="0 0 68 68" class="op-logo">
-        <rect width="68" height="68" rx="5" fill="${color}"/>
-        <text x="34" y="38" font-size="18" fill="${textColor}" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-weight="bold">${code}</text>
-      </svg>`;
-
-    default: {
-      const br = '5';
-      const fs = code.length > 2 ? '18' : '24';
-      return `<svg viewBox="0 0 68 68" class="op-logo">
-        <rect width="68" height="68" rx="${br}" fill="${color}"/>
-        <text x="34" y="38" font-size="${fs}" fill="${textColor}" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-weight="bold">${code}</text>
-      </svg>`;
-    }
+  const imgSrc = OPERATOR_LOGO_IMG[operator];
+  if (imgSrc) {
+    return `<img src="${imgSrc}" class="op-logo op-logo-img" alt="${operator}">`;
   }
+
+  // SVG fallback for Toei and generic operators
+  if (operator === 'Toei') {
+    return `<svg viewBox="0 0 68 68" class="op-logo">
+      <rect width="68" height="68" rx="5" fill="#00a04a"/>
+      <path d="M34,57 L-6,43 A42,42 0 0,1 74,43 Z" fill="white"/>
+      <rect x="28" y="10" width="12" height="47" fill="#00a04a"/>
+      <rect x="32" y="55" width="4" height="12" fill="white"/>
+      <text x="34" y="10" font-size="9" fill="#c8ffc8" text-anchor="middle" font-family="monospace">${code}</text>
+    </svg>`;
+  }
+
+  const fs = code.length > 2 ? '18' : '24';
+  return `<svg viewBox="0 0 68 68" class="op-logo">
+    <rect width="68" height="68" rx="5" fill="${color}"/>
+    <text x="34" y="38" font-size="${fs}" fill="${textColor}" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-weight="bold">${code}</text>
+  </svg>`;
 }
 
 function carDiagramHTML(code, color) {
