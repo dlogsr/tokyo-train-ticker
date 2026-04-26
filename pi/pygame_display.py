@@ -33,7 +33,7 @@ FPS      = 4
 
 # ── Backlight ─────────────────────────────────────────────────────────────────
 BACKLIGHT_GPIO = 18
-BRIGHT_FULL    = 255
+BRIGHT_FULL    = 128
 BRIGHT_DIM     = 15
 DIM_AFTER      = 120   # seconds idle before dimming
 
