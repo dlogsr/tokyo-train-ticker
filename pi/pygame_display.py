@@ -39,7 +39,7 @@ FOOTER_H = 32
 FOOTER_Y = SCREEN_H - FOOTER_H
 STRIP_H  = 24
 COL_H    = 15
-ROW_H    = 20
+ROW_H    = 22
 
 # ── Car formation data ────────────────────────────────────────────────────────
 CARS = {
@@ -683,12 +683,12 @@ def draw_upcoming_list(draw, top_y):
         bidx = next((i for i, (m, _) in enumerate(BUCKETS) if eta <= m), -1)
         if bidx >= 0 and bidx != last_bucket:
             lbl = BUCKETS[bidx][1]
-            draw.rectangle([0, row_y, SCREEN_W, row_y+12], fill=BLACK)
-            draw.text((4, row_y+1), lbl, font=f_xs, fill=(35,35,35))
-            lx = 4 + text_w(draw, lbl, f_xs) + 4
+            draw.rectangle([0, row_y, SCREEN_W, row_y+13], fill=BLACK)
+            draw.text((4, row_y+2), lbl, font=f_hdr, fill=(35,35,35))
+            lx = 4 + text_w(draw, lbl, f_hdr) + 4
             draw.line([lx, row_y+6, SCREEN_W-4, row_y+6], fill=(20,20,20))
             last_bucket = bidx
-            row_y += 12
+            row_y += 13
             if row_y >= FOOTER_Y:
                 break
 

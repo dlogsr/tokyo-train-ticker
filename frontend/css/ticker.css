@@ -330,7 +330,7 @@ html, body {
 .board-row {
   display: flex;
   align-items: center;
-  height: 19px;
+  height: 22px;
   padding: 0 4px 0 2px;
   border-bottom: 1px solid #0e0e0e;
   /* border-left color set inline by JS */
