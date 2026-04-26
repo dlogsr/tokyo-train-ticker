@@ -74,7 +74,7 @@ const CARS = {
 
 // ── Operator icon (small secondary image below line badge) ────────────────────
 const OPERATOR_LOGO_IMG = {
-  'JR-East':    '/logos/jr-east.png',
+  'JR-East':    '/logos/jr-east.svg',
   'TokyoMetro': '/logos/tokyo-metro.png',
   'Tokyu':      '/logos/tokyu.png',
   'Tobu':       '/logos/tobu.png',
