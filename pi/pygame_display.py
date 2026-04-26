@@ -201,7 +201,7 @@ def _load_font(size):
 fonts = {}
 def get_font(key):
     if key not in fonts:
-        sizes = {"xs": 13, "sm": 16, "md": 19, "lg": 23, "xl": 30, "hero": 40}
+        sizes = {"xxs": 10, "xs": 13, "sm": 16, "md": 19, "lg": 23, "xl": 30, "hero": 40}
         fonts[key] = _load_font(sizes.get(key, 12))
     return fonts[key]
 
@@ -354,7 +354,7 @@ def draw_dest(draw, x, y, dest_en, font_en, color, max_w):
     key = dest_en.upper().lstrip("→ ").strip()
     ja  = DEST_JA.get(key, "")
     if ja:
-        f_ja = get_cjk_font(10)
+        f_ja = get_cjk_font(13)
         draw.text((x, y), ja, font=f_ja, fill=(150, 125, 50))
         x     += text_w(draw, ja, f_ja) + 3
         max_w -= text_w(draw, ja, f_ja) + 3
@@ -654,7 +654,7 @@ def draw_upcoming_list(draw, top_y):
     h_y = top_y
     draw.rectangle([0, h_y, SCREEN_W, h_y + COL_H], fill=(10, 10, 10))
     draw.line([0, h_y + COL_H, SCREEN_W, h_y + COL_H], fill=BORDER)
-    f_hdr = get_font("xs")
+    f_hdr = get_font("xxs")
     draw.text((4,   h_y+3), "LINE",        font=f_hdr, fill=(45,45,45))
     draw.text((36,  h_y+3), "NEXT TRAINS", font=f_hdr, fill=(45,45,45))
     draw.text((289, h_y+3), "MIN",         font=f_hdr, fill=(45,45,45))

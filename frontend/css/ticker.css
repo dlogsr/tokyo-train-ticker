@@ -213,7 +213,7 @@ html, body {
 /* Kanji destination prefix in hero card */
 .dest-ja {
   font-family: 'Noto Sans JP', sans-serif;
-  font-size: 13px;
+  font-size: 17px;
   color: #967830;
   flex-shrink: 0;
 }
@@ -221,7 +221,7 @@ html, body {
 /* Kanji destination prefix in list rows */
 .dest-ja-row {
   font-family: 'Noto Sans JP', sans-serif;
-  font-size: 11px;
+  font-size: 14px;
   color: #6b521a;
   margin-right: 2px;
 }
@@ -309,7 +309,7 @@ html, body {
 }
 .upcoming-head span {
   font-family: 'Press Start 2P', monospace;
-  font-size: 11px;
+  font-size: 7px;
   color: #333;
   letter-spacing: 0.3px;
 }
