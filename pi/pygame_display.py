@@ -361,7 +361,41 @@ def draw_dest(draw, x, y, dest_en, font_en, color, max_w):
         max_w -= text_w(draw, ja, f_ja) + 3
     draw_text(draw, x, y, dest_en, font_en, color, max_w)
 
-# ── Operator logo drawing ─────────────────────────────────────────────────────
+# ── Operator logo images ──────────────────────────────────────────────────────
+
+_OPERATOR_LOGO_FILES = {
+    'JR-East':    'jr-east.png',
+    'TokyoMetro': 'tokyo-metro.png',
+    'Tokyu':      'tokyu.png',
+    'Tobu':       'tobu.png',
+    'Seibu':      'seibu.png',
+    'Odakyu':     'odakyu.png',
+    'Keio':       'keio.png',
+    'Keisei':     'keisei.png',
+    'Keikyu':     'keikyu.png',
+}
+
+_op_logos = {}
+
+def _load_operator_logos():
+    logo_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            '..', 'frontend', 'logos')
+    iw, ih = 62, 16
+    for operator, fname in _OPERATOR_LOGO_FILES.items():
+        path = os.path.join(logo_dir, fname)
+        try:
+            raw = Image.open(path).convert('RGB')
+            ow, oh = raw.size
+            scale = min(iw / ow, ih / oh)
+            nw, nh = round(ow * scale), round(oh * scale)
+            resized = raw.resize((nw, nh), Image.LANCZOS)
+            icon = Image.new('RGB', (iw, ih), (255, 255, 255))
+            icon.paste(resized, ((iw - nw) // 2, (ih - nh) // 2))
+            _op_logos[operator] = icon
+        except Exception as e:
+            print(f"Logo load failed ({fname}): {e}")
+
+# ── Operator logo drawing (fallback geometric) ────────────────────────────────
 
 def _logo_bg(draw, bx, by, size, color, radius=None):
     if radius is None:
@@ -1068,6 +1102,7 @@ def process_scroll(dy):
 # ── Main loop ─────────────────────────────────────────────────────────────────
 def main():
     _ensure_cjk_font()
+    _load_operator_logos()
     _open_fb()
 
     threading.Thread(target=background_loop, daemon=True).start()
