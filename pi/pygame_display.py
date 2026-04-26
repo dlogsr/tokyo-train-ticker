@@ -31,6 +31,50 @@ API_BASE = os.getenv("API_BASE", "http://localhost:8000")
 FB_DEV   = os.getenv("FB_DEV",   "/dev/fb0")
 FPS      = 4
 
+# ── Backlight ─────────────────────────────────────────────────────────────────
+BACKLIGHT_GPIO = 18
+BRIGHT_FULL    = 255
+BRIGHT_DIM     = 15
+DIM_AFTER      = 120   # seconds idle before dimming
+
+_pi_handle             = None
+_last_activity: float  = 0.0
+_is_dimmed: bool       = False
+
+def _init_backlight():
+    global _pi_handle
+    try:
+        import lgpio
+        h = lgpio.gpiochip_open(0)
+        lgpio.tx_pwm(h, BACKLIGHT_GPIO, 1000, 100)
+        _pi_handle = ("lgpio", h)
+        print("Backlight: lgpio OK")
+    except Exception as e:
+        print(f"Backlight init: {e} — install: sudo apt install python3-lgpio")
+
+def set_backlight(level: int):
+    global _is_dimmed
+    if _pi_handle is None:
+        return
+    kind, h = _pi_handle
+    pct = round(max(0, min(255, level)) * 100 / 255)
+    if kind == "lgpio":
+        import lgpio
+        lgpio.tx_pwm(h, BACKLIGHT_GPIO, 1000, pct)
+    _is_dimmed = (level < BRIGHT_FULL)
+
+def wake_backlight():
+    global _last_activity, _is_dimmed
+    _last_activity = time.time()
+    if _is_dimmed:
+        set_backlight(BRIGHT_FULL)
+
+def check_backlight():
+    if _pi_handle is None or _is_dimmed:
+        return
+    if time.time() - _last_activity > DIM_AFTER:
+        set_backlight(BRIGHT_DIM)
+
 # ── Layout constants ──────────────────────────────────────────────────────────
 HDR_H    = 22
 HERO_TOP = HDR_H
@@ -165,6 +209,7 @@ def flush(img: Image.Image):
         print(f"fb write error: {e}")
 
 def _cleanup():
+    set_backlight(BRIGHT_FULL)
     if _fb is not None:
         try:
             _fb.seek(0)
@@ -953,6 +998,7 @@ def handle_touch_events(q):
 
             if pressure > 0:
                 last_x, last_y = x, y
+                wake_backlight()
 
             if pressure > 0 and prev_pressure == 0:
                 start_x, start_y = x, y
@@ -1117,12 +1163,15 @@ def main():
 
     global _last_tap_pos, _last_tap_time, _service_start_time
     _service_start_time = time.time()
+    _init_backlight()
+    wake_backlight()
 
     while True:
         try:
             t0 = time.time()
 
             check_hold()
+            check_backlight()
 
             while not _touch_q.empty():
                 try:
