@@ -244,7 +244,17 @@ const app = (() => {
 
   function selectPlatform(plt) {
     currentPlatform = plt;
+    closePltPopup();
     refresh();
+  }
+
+  function togglePltPopup() {
+    const popup = document.getElementById('plt-popup');
+    popup.classList.toggle('hidden');
+  }
+
+  function closePltPopup() {
+    document.getElementById('plt-popup').classList.add('hidden');
   }
 
   function selectLine(lineCode) {
@@ -326,11 +336,11 @@ const app = (() => {
       train.platform ? `PLT ${train.platform}` : '';
   }
 
-  // ── Platform filter strip ─────────────────────────────────────────────────────
+  // ── Platform popup ────────────────────────────────────────────────────────────
 
   function renderPlatformStrip(trains) {
-    const strip = document.getElementById('platform-strip');
     const buttons = document.getElementById('platform-buttons');
+    const trigger = document.getElementById('plt-trigger');
 
     const seen = new Set();
     trains.forEach(t => { if (t.platform && t.platform !== '–') seen.add(String(t.platform)); });
@@ -340,10 +350,12 @@ const app = (() => {
       return a.localeCompare(b);
     });
 
-    if (platforms.length <= 1) { strip.classList.add('hidden'); return; }
-    strip.classList.remove('hidden');
-
     if (currentPlatform !== 'ALL' && !platforms.includes(currentPlatform)) currentPlatform = 'ALL';
+
+    trigger.textContent = currentPlatform !== 'ALL' ? `P${currentPlatform}` : 'PLT';
+    trigger.classList.toggle('active', currentPlatform !== 'ALL');
+
+    if (platforms.length <= 1) { buttons.innerHTML = ''; return; }
 
     buttons.innerHTML = ['ALL', ...platforms].map(p =>
       `<button class="plt-btn ${currentPlatform === p ? 'active' : ''}" onclick="app.selectPlatform('${p}')">${p}</button>`
@@ -579,7 +591,17 @@ const app = (() => {
     return `rgb(${r},${g},${b})`;
   }
 
-  return { init, setMode, selectStation, selectLine, selectPlatform, openStationPicker, openLinePicker, _pickStation, _pickLine };
+  return { init, setMode, selectStation, selectLine, selectPlatform, togglePltPopup, openStationPicker, openLinePicker, _pickStation, _pickLine };
 })();
 
-document.addEventListener('DOMContentLoaded', () => app.init());
+document.addEventListener('DOMContentLoaded', () => {
+  app.init();
+  document.addEventListener('click', e => {
+    const popup = document.getElementById('plt-popup');
+    const trigger = document.getElementById('plt-trigger');
+    if (popup && !popup.classList.contains('hidden') &&
+        !popup.contains(e.target) && e.target !== trigger) {
+      popup.classList.add('hidden');
+    }
+  });
+});

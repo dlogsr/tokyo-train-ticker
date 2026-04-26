@@ -18,14 +18,11 @@ html, body {
   color: #e0e0e0;
 }
 
-/* ── 320×240 screen — dot matrix grid burned in ─────────────────────────── */
+/* ── 320×240 screen ─────────────────────────────────────────────────────── */
 #screen {
   width: 320px;
   height: 240px;
   background-color: #000;
-  /* Dot matrix LED grid — faint dots everywhere like unlit LEDs */
-  background-image: radial-gradient(circle, #1e1e1e 1px, transparent 1px);
-  background-size: 3.5px 3.5px;
   position: relative;
   overflow: hidden;
   display: flex;
@@ -268,52 +265,43 @@ html, body {
 .eta-arriving { animation: led-blink 0.7s ease-in-out infinite; }
 
 /* ── Platform filter strip ──────────────────────────────────────────────── */
-#platform-strip {
-  height: 14px;
-  background: rgba(0,0,0,0.7);
-  border-bottom: 1px solid #161616;
-  display: flex;
-  align-items: center;
-  padding: 0 4px;
-  gap: 3px;
-  overflow: hidden;
-  flex-shrink: 0;
+/* ── Platform popup ─────────────────────────────────────────────────────── */
+#plt-trigger {
+  cursor: pointer;
+  user-select: none;
 }
-#platform-strip.hidden { display: none; }
+#plt-trigger:hover { color: #aaa !important; }
+#plt-trigger.active { color: #c8a028 !important; }
 
-.plt-label {
-  font-size: 7px;
-  color: #333;
-  letter-spacing: 0.5px;
-  flex-shrink: 0;
-  font-family: 'Press Start 2P', monospace;
+#plt-popup {
+  position: absolute;
+  right: 4px;
+  top: 136px;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 3px;
+  z-index: 10;
+  min-width: 36px;
+  padding: 2px;
 }
-
-#platform-buttons { display: flex; gap: 2px; align-items: center; overflow: hidden; }
+#plt-popup.hidden { display: none; }
+#platform-buttons { display: flex; flex-direction: column; gap: 1px; }
 
 .plt-btn {
-  font-family: 'Press Start 2P', monospace;
-  font-size: 6px;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-size: 11px;
   background: transparent;
-  border: 1px solid #222;
-  color: #444;
-  padding: 1px 3px;
-  height: 10px;
-  line-height: 8px;
-  border-radius: 1px;
+  border: none;
+  color: #555;
+  padding: 1px 6px;
   cursor: pointer;
   white-space: nowrap;
+  text-align: center;
+  border-radius: 2px;
   transition: all 0.1s;
-  display: flex;
-  align-items: center;
 }
-.plt-btn:hover  { color: #aaa; border-color: #444; }
-.plt-btn.active {
-  color: #fff;
-  border-color: #888;
-  background: #111;
-  text-shadow: 0 0 6px #fff;
-}
+.plt-btn:hover  { color: #ccc; background: #1a1a1a; }
+.plt-btn.active { color: #fff; background: #222; }
 
 /* ── Upcoming trains list ───────────────────────────────────────────────── */
 .upcoming-head {
@@ -324,6 +312,7 @@ html, body {
   background: rgba(0,0,0,0.8);
   border-bottom: 1px solid #161616;
   flex-shrink: 0;
+  position: relative;
 }
 .upcoming-head span {
   font-family: 'Press Start 2P', monospace;

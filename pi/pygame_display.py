@@ -262,6 +262,7 @@ state = {
     "connected":      False,
     "last_update":    0,
     "platform_filter":"ALL",
+    "plt_popup_open": False,
     "picker_open":    False,
     "picker_type":    None,
     "picker_results": [],
@@ -478,7 +479,7 @@ def draw_header(draw):
     cw = text_w(draw, clk, f_clk)
     draw.text((SCREEN_W - cw - 4, 6), clk, font=f_clk, fill=(70, 70, 70))
 
-def draw_hero_card(draw):
+def draw_hero_card(draw, img):
     trains  = state["station_trains"]
     pf      = state["platform_filter"]
     visible = [t for t in trains if pf == "ALL" or str(t.get("platform","")) == pf]
@@ -493,16 +494,39 @@ def draw_hero_card(draw):
 
     color   = hex_to_rgb(train.get("color", "#888888"))
     bright  = brighten(color)
+    shape   = train.get("shape", "rect")
 
     code     = train["line_code"]
     line_obj = next((l for l in state["all_lines"] if l["code"] == code), {})
     operator = line_obj.get("operator", "")
 
-    badge_size = 68
+    # Primary: colored line-code badge
+    badge_size = 60
     bx = (100 - badge_size) // 2
-    by = HERO_TOP + (88 - badge_size) // 2
-    draw_operator_logo(draw, bx, by, badge_size, operator, code,
-                       train.get("color", "#888888"), train.get("text_color", "#000000"))
+    by = HERO_TOP + 4
+    rgb_bg = color
+    rgb_fg = hex_to_rgb(train.get("text_color", "#ffffff"))
+    if shape == "circle":
+        draw.ellipse([bx, by, bx+badge_size, by+badge_size], fill=rgb_bg)
+    elif shape == "square":
+        draw.rectangle([bx, by, bx+badge_size, by+badge_size], fill=rgb_bg)
+    else:
+        draw.rounded_rectangle([bx, by, bx+badge_size, by+badge_size],
+                                radius=max(4, badge_size//8), fill=rgb_bg)
+    f_code = get_font("hero")
+    lw = text_w(draw, code, f_code)
+    draw.text((bx + (badge_size-lw)//2, by + (badge_size-f_code.size)//2),
+              code, font=f_code, fill=rgb_fg)
+
+    # Secondary: operator logo below badge
+    logo_y = by + badge_size + 2
+    if operator in _op_logos:
+        logo_img = _op_logos[operator]
+        lw_logo, lh_logo = logo_img.size
+        img.paste(logo_img, (bx + (badge_size - lw_logo)//2, logo_y))
+    else:
+        draw_operator_logo(draw, bx, logo_y, 20, operator, code,
+                           train.get("color","#888888"), train.get("text_color","#000000"))
 
     rx = 104
     line_name    = line_obj.get("name", code)
@@ -553,41 +577,39 @@ def draw_hero_card(draw):
         draw.text((rx + 100, HERO_TOP + 64), f"PLT {plt}",
                   font=get_font("xs"), fill=(60, 60, 60))
 
-def draw_platform_strip(draw) -> int:
+def _plt_popup_platforms():
     trains = state["station_trains"]
-    seen = set()
-    for t in trains:
-        p = str(t.get("platform","")).strip()
-        if p and p != "–":
-            seen.add(p)
-    platforms = sorted(seen, key=lambda v: (float(v) if v.replace(".","").isdigit() else 999, v))
+    seen = set(str(t.get("platform","")).strip() for t in trains
+               if t.get("platform") and t.get("platform") != "–")
+    return ["ALL"] + sorted(seen, key=lambda v: (float(v) if v.replace(".","").isdigit() else 999, v))
 
-    if len(platforms) <= 1:
-        return HERO_BOT
+PLT_POPUP_ITEM_H = 18
+PLT_POPUP_W      = 52
+PLT_POPUP_PAD    = 3
 
-    y = HERO_BOT
-    draw.rectangle([0, y, SCREEN_W, y + STRIP_H], fill=(6, 6, 6))
-    draw.line([0, y + STRIP_H, SCREEN_W, y + STRIP_H], fill=BORDER)
+def plt_popup_rect():
+    platforms = _plt_popup_platforms()
+    h = len(platforms) * PLT_POPUP_ITEM_H + PLT_POPUP_PAD * 2
+    x = SCREEN_W - PLT_POPUP_W - 4
+    y = HERO_BOT + COL_H + 1
+    return x, y, PLT_POPUP_W, h
 
-    f  = get_font("sm")
-    draw.text((4, y + 6), "PLT", font=f, fill=(40, 40, 40))
-    x  = 36
+def draw_plt_popup(draw):
+    platforms = _plt_popup_platforms()
+    px, py, pw, ph = plt_popup_rect()
     pf = state["platform_filter"]
-    for label in ["ALL"] + platforms:
+    f  = get_font("xs")
+    draw.rounded_rectangle([px-1, py, px+pw+1, py+ph], radius=3, fill=(18, 18, 18))
+    draw.rounded_rectangle([px-1, py, px+pw+1, py+ph], radius=3, outline=(70, 70, 70))
+    for i, label in enumerate(platforms):
+        iy = py + PLT_POPUP_PAD + i * PLT_POPUP_ITEM_H
         active = (label == pf)
-        tw     = text_w(draw, label, f) + 10
-        brect  = [x, y+3, x+tw, y+STRIP_H-3]
         if active:
-            draw.rounded_rectangle(brect, radius=3, fill=(25, 25, 25))
-            draw.rounded_rectangle(brect, radius=3, outline=(100, 100, 100))
-            draw.text((x+5, y+6), label, font=f, fill=WHITE)
-        else:
-            draw.rounded_rectangle(brect, radius=3, outline=(30, 30, 30))
-            draw.text((x+5, y+6), label, font=f, fill=DIM)
-        x += tw + 5
-        if x > SCREEN_W - 14:
-            break
-    return y + STRIP_H
+            draw.rounded_rectangle([px+2, iy, px+pw-2, iy+PLT_POPUP_ITEM_H-2],
+                                   radius=2, fill=(40, 40, 40))
+        lw = text_w(draw, label, f)
+        draw.text((px + (pw - lw)//2, iy + (PLT_POPUP_ITEM_H - f.size)//2),
+                  label, font=f, fill=WHITE if active else (110, 110, 110))
 
 def draw_upcoming_list(draw, top_y):
     trains  = state["station_trains"]
@@ -602,8 +624,11 @@ def draw_upcoming_list(draw, top_y):
     f_hdr = get_font("xs")
     draw.text((4,   h_y+3), "LINE",        font=f_hdr, fill=(45,45,45))
     draw.text((36,  h_y+3), "NEXT TRAINS", font=f_hdr, fill=(45,45,45))
-    draw.text((248, h_y+3), "PLT",         font=f_hdr, fill=(45,45,45))
     draw.text((289, h_y+3), "MIN",         font=f_hdr, fill=(45,45,45))
+    pf_disp  = state["platform_filter"]
+    plt_txt  = f"P{pf_disp}" if pf_disp != "ALL" else "PLT"
+    plt_col  = (180, 150, 40) if pf_disp != "ALL" else (55, 55, 55)
+    draw.text((248, h_y+3), plt_txt, font=f_hdr, fill=plt_col)
 
     row_y  = h_y + COL_H + 1
     f_sm   = get_font("sm")
@@ -972,6 +997,7 @@ def process_touch(x, y):
             if action == "station":
                 state["mode"] = "station"
                 state["platform_filter"] = "ALL"
+                state["plt_popup_open"] = False
                 state["picker_open"] = False
             elif action == "line":
                 state["picker_type"] = "line"
@@ -1007,21 +1033,22 @@ def process_touch(x, y):
         state["list_scroll"] = 0
         return
 
-    if state["mode"] == "station" and HERO_BOT <= y <= HERO_BOT + STRIP_H:
-        trains = state["station_trains"]
-        seen = set(str(t.get("platform","")).strip() for t in trains
-                   if t.get("platform") and t.get("platform") != "–")
-        platforms = ["ALL"] + sorted(seen, key=lambda v: (float(v) if v.replace(".","").isdigit() else 999, v))
-        cx = 34
-        f_tmp = get_font("xs")
-        img_tmp = Image.new("RGB", (1, 1))
-        d_tmp   = ImageDraw.Draw(img_tmp)
-        for lbl in platforms:
-            tw = text_w(d_tmp, lbl, f_tmp) + 8
-            if x <= cx + tw:
-                state["platform_filter"] = lbl
-                return
-            cx += tw + 4
+    # Platform popup: handle taps when open
+    if state["plt_popup_open"]:
+        px, py, pw, ph = plt_popup_rect()
+        if px <= x <= px + pw and py <= y <= py + ph:
+            platforms = _plt_popup_platforms()
+            idx = (y - py - PLT_POPUP_PAD) // PLT_POPUP_ITEM_H
+            if 0 <= idx < len(platforms):
+                state["platform_filter"] = platforms[idx]
+                state["list_scroll"] = 0
+        state["plt_popup_open"] = False
+        return
+
+    # PLT column header tap → open popup
+    if state["mode"] == "station" and HERO_BOT <= y <= HERO_BOT + COL_H and x >= 240:
+        state["plt_popup_open"] = True
+        return
 
 def process_scroll(dy):
     if state["picker_open"]:
@@ -1086,9 +1113,10 @@ def main():
             elif state["picker_open"]:
                 draw_picker(draw)
             elif state["mode"] == "station":
-                draw_hero_card(draw)
-                plt_bottom = draw_platform_strip(draw)
-                draw_upcoming_list(draw, plt_bottom)
+                draw_hero_card(draw, img)
+                draw_upcoming_list(draw, HERO_BOT)
+                if state["plt_popup_open"]:
+                    draw_plt_popup(draw)
             else:
                 draw_line_tracker(draw)
 

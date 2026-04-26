@@ -45,18 +45,15 @@
           </div>
         </div>
 
-        <!-- Platform filter strip -->
-        <div id="platform-strip">
-          <span class="plt-label">PLT</span>
-          <div id="platform-buttons"></div>
-        </div>
-
         <!-- Upcoming trains -->
         <div id="upcoming-header" class="upcoming-head">
           <span class="col-line">LINE</span>
           <span class="col-dest">NEXT TRAINS</span>
-          <span class="col-plat">PLT</span>
+          <span class="col-plat" id="plt-trigger" onclick="app.togglePltPopup()">PLT</span>
           <span class="col-time">MIN</span>
+        </div>
+        <div id="plt-popup" class="hidden">
+          <div id="platform-buttons"></div>
         </div>
         <div id="train-list"></div>
         <div id="no-trains" class="hidden">No service data</div>
