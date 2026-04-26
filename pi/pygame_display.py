@@ -1350,10 +1350,11 @@ def main():
                     if event[0] == "raw_tap" and state["calibrating"]:
                         process_calib_tap(event[1], event[2])
                     elif event[0] == "tap":
-                        _last_tap_pos = (event[1], event[2])
-                        _last_tap_time = time.time()
-                        _last_raw = event[3] if len(event) > 3 else _last_raw
-                        process_touch(event[1], event[2])
+                        if time.time() - _service_start_time >= 10.0:
+                            _last_tap_pos = (event[1], event[2])
+                            _last_tap_time = time.time()
+                            _last_raw = event[3] if len(event) > 3 else _last_raw
+                            process_touch(event[1], event[2])
                     elif event[0] == "scroll":
                         process_scroll(event[1])
                 except Exception as e:
