@@ -1,7 +1,12 @@
 /* ── Reset ──────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-@font-face { font-display: swap; }
+@font-face {
+  font-family: 'VT323';
+  src: url('/fonts/VT323-Regular.woff2') format('woff2'),
+       url('/fonts/VT323-Regular.ttf') format('truetype');
+  font-display: swap;
+}
 
 html, body {
   background: #111;
@@ -9,7 +14,7 @@ html, body {
   flex-direction: column;
   align-items: center;
   min-height: 100vh;
-  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  font-family: 'VT323', 'Share Tech Mono', 'Courier New', monospace;
   color: #e0e0e0;
 }
 
@@ -69,7 +74,7 @@ html, body {
 }
 
 #clock {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
   font-size: 10px;
   color: #555;
   letter-spacing: 0.5px;
@@ -154,7 +159,7 @@ html, body {
 }
 
 #next-line-name {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
   font-size: 9px;
   color: #555;
   letter-spacing: 0.5px;
@@ -196,7 +201,7 @@ html, body {
 }
 
 .car-count {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
   font-size: 7px;
   color: #2a2a2a;
   margin-left: 2px;
@@ -243,13 +248,13 @@ html, body {
 }
 
 #next-delay {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
   font-size: 9px;
   color: #e87722;
 }
 
 #next-platform {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
   font-size: 9px;
   color: #444;
   letter-spacing: 0.3px;
@@ -353,7 +358,7 @@ html, body {
 .train-row:nth-child(even) { background: rgba(255,255,255,0.01); }
 
 .train-row .col-dest {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
   font-size: 9px;
   font-weight: bold;
   white-space: nowrap;
@@ -465,7 +470,7 @@ html, body {
   gap: 5px;
   margin-bottom: 4px;
 }
-.tracker-train-num { font-size: 8px; color: #555; font-family: 'Share Tech Mono', monospace; }
+.tracker-train-num { font-size: 8px; color: #555; font-family: 'VT323', 'Share Tech Mono', monospace; }
 .tracker-dest {
   font-family: 'Press Start 2P', monospace;
   font-size: 8px;
@@ -474,10 +479,10 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.tracker-delay { font-size: 8px; color: #e87722; font-family: 'Share Tech Mono', monospace; }
+.tracker-delay { font-size: 8px; color: #e87722; font-family: 'VT323', 'Share Tech Mono', monospace; }
 
 .station-progress { display: flex; align-items: center; }
-.prog-station { font-size: 7px; color: #3a3a3a; white-space: nowrap; overflow: hidden; max-width: 52px; text-align: center; font-family: 'Share Tech Mono', monospace; }
+.prog-station { font-size: 7px; color: #3a3a3a; white-space: nowrap; overflow: hidden; max-width: 52px; text-align: center; font-family: 'VT323', 'Share Tech Mono', monospace; }
 .prog-station.current { color: #ddd; font-size: 7.5px; text-shadow: 0 0 6px rgba(255,255,255,0.3); }
 .prog-station.next { color: #888; }
 .prog-dot { width: 4px; height: 4px; border-radius: 50%; background: #2a2a2a; flex-shrink: 0; margin: 0 1px; }
@@ -510,7 +515,7 @@ html, body {
   border: none;
   border-bottom: 1px solid #1e1e1e;
   color: #ddd;
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
   font-size: 11px;
   padding: 5px 6px;
   outline: none;
@@ -528,7 +533,7 @@ html, body {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
 }
 .picker-item:hover, .picker-item:active { background: rgba(255,255,255,0.05); }
 .picker-item .item-ja { font-family: 'Noto Sans JP', sans-serif; font-size: 9px; color: #555; }
@@ -622,7 +627,7 @@ html, body {
   background: #0a0a0a;
   border: 1px solid #181818;
   width: 320px;
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
   font-size: 11px;
   color: #888;
 }

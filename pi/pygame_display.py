@@ -216,6 +216,7 @@ def _cleanup():
 
 # ── Fonts ─────────────────────────────────────────────────────────────────────
 FONT_PATHS = [
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts", "VT323-Regular.ttf"),
     "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
     "/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf",
@@ -235,7 +236,7 @@ def _load_font(size):
 fonts = {}
 def get_font(key):
     if key not in fonts:
-        sizes = {"xs": 10, "sm": 12, "md": 14, "lg": 18, "xl": 24, "hero": 30}
+        sizes = {"xs": 13, "sm": 16, "md": 18, "lg": 22, "xl": 28, "hero": 38}
         fonts[key] = _load_font(sizes.get(key, 12))
     return fonts[key]
 
@@ -535,10 +536,10 @@ def draw_operator_logo(draw, bx, by, size, operator, code, color, text_color):
         draw.text((cx - lw//2, cy - f.size//2), code, font=f, fill=fg)
 
 def dot_grid_overlay(img):
-    arr = np.array(img)
-    for y in range(0, SCREEN_H, 4):
-        for x in range(0, SCREEN_W, 4):
-            arr[y, x] = np.clip(arr[y, x].astype(int) - 15, 0, 255)
+    arr = np.array(img, dtype=np.int16)
+    # Darken every 4th row and every 4th column to simulate LED dot gaps
+    arr[::4, :] = np.clip(arr[::4, :] - 50, 0, 255)
+    arr[:, ::4] = np.clip(arr[:, ::4] - 50, 0, 255)
     return Image.fromarray(arr.astype(np.uint8))
 
 # ── Screen sections ───────────────────────────────────────────────────────────
@@ -1440,6 +1441,7 @@ def main():
             draw_footer(draw)
             draw_tap_indicator(draw)
 
+            img = dot_grid_overlay(img)
             flush(img)
 
             elapsed = time.time() - t0
