@@ -858,7 +858,7 @@ def draw_footer(draw):
                   font=get_font("xs"), fill=(50,40,10))
 
 # ── Touch input — reads calibrated coords from tslib ─────────────────────────
-_TOUCH_KEYWORDS = ("touch", "ads", "stmpe", "ft5", "ft6", "goodix", "edt-ft", "ili")
+_TOUCH_KEYWORDS = ("touch", "ads", "stmpe", "ft5", "ft6", "goodix", "edt-ft", "ili", "ep0110", "eeti")
 
 def find_touch_device():
     base = "/sys/class/input"

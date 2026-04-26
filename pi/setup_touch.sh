@@ -13,7 +13,7 @@ apt-get install -y libts-bin libts0
 # Find the touch input device by scanning sysfs names
 TOUCH_DEV=$(python3 - <<'PYEOF'
 import os, sys
-keywords = ("touch", "ads", "stmpe", "ft5", "ft6", "goodix", "edt-ft", "ili")
+keywords = ("touch", "ads", "stmpe", "ft5", "ft6", "goodix", "edt-ft", "ili", "ep0110", "eeti")
 for d in sorted(os.listdir("/sys/class/input")):
     nf = f"/sys/class/input/{d}/device/name"
     if os.path.exists(nf):
