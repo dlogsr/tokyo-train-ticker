@@ -182,7 +182,7 @@ def _cleanup():
 
 # ── Fonts ─────────────────────────────────────────────────────────────────────
 FONT_PATHS = [
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts", "VT323-Regular.ttf"),
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts", "DSEG14ClassicMini-Regular.ttf"),
     "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
     "/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf",
