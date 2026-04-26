@@ -46,6 +46,7 @@ def _init_backlight():
     try:
         import lgpio
         h = lgpio.gpiochip_open(0)
+        lgpio.gpio_claim_output(h, BACKLIGHT_GPIO)
         lgpio.tx_pwm(h, BACKLIGHT_GPIO, 1000, 100)
         _pi_handle = ("lgpio", h)
         print("Backlight: lgpio OK")
