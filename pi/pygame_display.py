@@ -31,7 +31,7 @@ except ImportError:
 SCREEN_W, SCREEN_H = 320, 240
 API_BASE   = os.getenv("API_BASE", "http://localhost:8000")
 FB_DEV     = os.getenv("FB_DEV",   "/dev/fb0")
-FPS        = 8
+FPS        = 4
 CALIB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration.json")
 
 # Calibration coefficients: screen_x = sx_scale*raw_y + sx_offset
@@ -1347,15 +1347,15 @@ def main():
             while not _touch_q.empty():
                 try:
                     event = _touch_q.get_nowait()
+                    age = time.time() - _service_start_time
                     if event[0] == "raw_tap" and state["calibrating"]:
                         process_calib_tap(event[1], event[2])
-                    elif event[0] == "tap":
-                        if time.time() - _service_start_time >= 10.0:
-                            _last_tap_pos = (event[1], event[2])
-                            _last_tap_time = time.time()
-                            _last_raw = event[3] if len(event) > 3 else _last_raw
-                            process_touch(event[1], event[2])
-                    elif event[0] == "scroll":
+                    elif event[0] == "tap" and age >= 30.0:
+                        _last_tap_pos = (event[1], event[2])
+                        _last_tap_time = time.time()
+                        _last_raw = event[3] if len(event) > 3 else _last_raw
+                        process_touch(event[1], event[2])
+                    elif event[0] == "scroll" and age >= 30.0:
                         process_scroll(event[1])
                 except Exception as e:
                     print(f"touch event error: {e}", flush=True)
