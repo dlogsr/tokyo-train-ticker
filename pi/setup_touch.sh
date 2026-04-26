@@ -1,14 +1,16 @@
 #!/bin/bash
-# One-time touch setup for Adafruit PiTFT 2.8" (FT6236 / stmpe / ads7846).
+# One-time touch setup for PiTFT 2.8" (FT6236 / EETI EP0110 / stmpe / ads7846).
 # Installs tslib, creates a stable device symlink, and runs ts_calibrate.
 # The calibration handles axis swap and scaling — no app-level math needed.
+# Safe to re-run after reflashing.
 #
 # Run as root on the Pi:  sudo bash pi/setup_touch.sh
 set -e
 
 echo "=== PiTFT touch setup ==="
 
-apt-get install -y libts-bin libts0
+apt-get update -qq
+apt-get install -y libts-bin libts0 libts0t64 2>/dev/null || apt-get install -y libts-bin
 
 # Find the touch input device by scanning sysfs names
 TOUCH_DEV=$(python3 - <<'PYEOF'
@@ -34,10 +36,13 @@ fi
 echo "Found: $TOUCH_DEV"
 
 # Stable symlink so the eventX number never changes between boots
+# Covers common PiTFT touch controllers including EETI EP0110M09
 cat > /etc/udev/rules.d/51-pitft-touch.rules << 'EOF'
-SUBSYSTEM=="input", ATTRS{name}=="ft6x06_ts", SYMLINK+="input/touchscreen", MODE="0660", GROUP="input"
-SUBSYSTEM=="input", ATTRS{name}=="stmpe-ts",  SYMLINK+="input/touchscreen", MODE="0660", GROUP="input"
-SUBSYSTEM=="input", ATTRS{name}=="ads7846",   SYMLINK+="input/touchscreen", MODE="0660", GROUP="input"
+SUBSYSTEM=="input", ATTRS{name}=="ft6x06_ts",      SYMLINK+="input/touchscreen", MODE="0660", GROUP="input"
+SUBSYSTEM=="input", ATTRS{name}=="stmpe-ts",       SYMLINK+="input/touchscreen", MODE="0660", GROUP="input"
+SUBSYSTEM=="input", ATTRS{name}=="ads7846",        SYMLINK+="input/touchscreen", MODE="0660", GROUP="input"
+SUBSYSTEM=="input", ATTRS{name}=="*EP0110*",       SYMLINK+="input/touchscreen", MODE="0660", GROUP="input"
+SUBSYSTEM=="input", ATTRS{name}=="*ep0110*",       SYMLINK+="input/touchscreen", MODE="0660", GROUP="input"
 EOF
 udevadm control --reload-rules && udevadm trigger
 
