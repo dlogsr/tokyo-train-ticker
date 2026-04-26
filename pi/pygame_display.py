@@ -33,48 +33,43 @@ FPS      = 4
 
 # ── Backlight ─────────────────────────────────────────────────────────────────
 BACKLIGHT_GPIO = 18
-BRIGHT_FULL    = 128
-BRIGHT_DIM     = 15
-DIM_AFTER      = 120   # seconds idle before dimming
+BRIGHT_FULL    = 255   # on
+BRIGHT_DIM     = 0     # off
+DIM_AFTER      = 120   # seconds idle before turning off
 
-_PWM_CHIP      = "/sys/class/pwm/pwmchip0"
-_PWM_PERIOD_NS = 1_000_000   # 1 kHz
+_BL_SYSFS = "/sys/class/backlight"
 
-_backlight_ok          = False
+_backlight_dev         = None   # path like /sys/class/backlight/soc:backlight
 _last_activity: float  = 0.0
 _is_dimmed: bool       = False
 
 def _init_backlight():
-    global _backlight_ok
+    global _backlight_dev
     try:
-        if not os.path.exists(f"{_PWM_CHIP}/pwm0"):
-            with open(f"{_PWM_CHIP}/export", "w") as f:
-                f.write("0")
-            time.sleep(0.15)
-        with open(f"{_PWM_CHIP}/pwm0/period", "w") as f:
-            f.write(str(_PWM_PERIOD_NS))
-        # set duty before enabling to avoid a glitch
-        duty = round(BRIGHT_FULL * _PWM_PERIOD_NS / 255)
-        with open(f"{_PWM_CHIP}/pwm0/duty_cycle", "w") as f:
-            f.write(str(duty))
-        with open(f"{_PWM_CHIP}/pwm0/enable", "w") as f:
-            f.write("1")
-        _backlight_ok = True
-        print("Backlight: sysfs hardware PWM OK")
+        entries = os.listdir(_BL_SYSFS)
+        if not entries:
+            print("Backlight: no sysfs device (on/off not available)")
+            return
+        _backlight_dev = os.path.join(_BL_SYSFS, entries[0])
+        # ensure screen is on at startup
+        with open(f"{_backlight_dev}/bl_power", "w") as f:
+            f.write("0")   # 0 = on, 4 = off (FB_BLANK_POWERDOWN)
+        print(f"Backlight: {_backlight_dev} OK")
     except Exception as e:
-        print(f"Backlight init: {e} — add 'dtoverlay=pwm' to /boot/firmware/config.txt and reboot")
+        print(f"Backlight init: {e}")
 
 def set_backlight(level: int):
     global _is_dimmed
-    if not _backlight_ok:
+    if _backlight_dev is None:
         return
-    duty = round(max(0, min(255, level)) * _PWM_PERIOD_NS / 255)
+    # level 0 = off, anything else = on
+    power = "0" if level > 0 else "4"
     try:
-        with open(f"{_PWM_CHIP}/pwm0/duty_cycle", "w") as f:
-            f.write(str(duty))
+        with open(f"{_backlight_dev}/bl_power", "w") as f:
+            f.write(power)
     except Exception as e:
         print(f"Backlight set error: {e}")
-    _is_dimmed = (level < BRIGHT_FULL)
+    _is_dimmed = (level == 0)
 
 def wake_backlight():
     global _last_activity, _is_dimmed
@@ -83,7 +78,7 @@ def wake_backlight():
         set_backlight(BRIGHT_FULL)
 
 def check_backlight():
-    if not _backlight_ok or _is_dimmed:
+    if _backlight_dev is None or _is_dimmed:
         return
     if time.time() - _last_activity > DIM_AFTER:
         set_backlight(BRIGHT_DIM)
