@@ -889,8 +889,8 @@ def draw_calibration(draw):
     # Previously registered dots (shown in default-formula screen coords)
     for i, (rx, ry) in enumerate(state["calib_taps"]):
         ptx, pty = _CALIB_TARGETS[i][:2]
-        dot_x = round(rx * (SCREEN_W - 1) / _touch_x_max)
-        dot_y = round(ry * (SCREEN_H - 1) / _touch_y_max)
+        dot_x = round((_touch_y_max - ry) * (SCREEN_W - 1) / _touch_y_max)
+        dot_y = round(rx * (SCREEN_H - 1) / _touch_x_max)
         draw.ellipse([dot_x-4, dot_y-4, dot_x+4, dot_y+4], fill=GREEN)
         draw.ellipse([ptx-3, pty-3, ptx+3, pty+3], outline=(60, 60, 60))
     draw.text((SCREEN_W//2 - text_w(draw, "long-press PICK to cancel", f_xs)//2, SCREEN_H - 14),
@@ -959,12 +959,13 @@ _touch_y_max = SCREEN_W - 1   # 319 — ABS_Y covers the horizontal range
 
 def _map_touch(rx, ry, xmax, ymax):
     if _calib:
-        sx = round(_calib["sx_scale"] * rx + _calib["sx_offset"])
-        sy = round(_calib["sy_scale"] * ry + _calib["sy_offset"])
+        # ABS_Y (ry) → screen_x,  ABS_X (rx) → screen_y
+        sx = round(_calib["sx_scale"] * ry + _calib["sx_offset"])
+        sy = round(_calib["sy_scale"] * rx + _calib["sy_offset"])
     else:
-        # ABS_Y → screen_x (inverted: ry=0 is right edge)
+        # ABS_Y → screen_x (inverted: ry=0 is right edge, ymax=left)
         sx = round((ymax - ry) * (SCREEN_W - 1) / ymax)
-        # ABS_X → screen_y (direct: rx=0 is top)
+        # ABS_X → screen_y (direct: rx=0 is top, xmax=bottom)
         sy = round(rx * (SCREEN_H - 1) / xmax)
     return max(0, min(SCREEN_W - 1, sx)), max(0, min(SCREEN_H - 1, sy))
 
@@ -1079,14 +1080,14 @@ def finish_calibration():
     (rx1,ry1),(rx2,ry2),(rx3,ry3),(rx4,ry4) = taps   # TL, TR, BR, BL
     tx_l, tx_r = _CALIB_TARGETS[0][0], _CALIB_TARGETS[1][0]   # screen_x: 30, 290
     ty_t, ty_b = _CALIB_TARGETS[0][1], _CALIB_TARGETS[2][1]   # screen_y: 30, 210
-    # ABS_X (rx) tracks horizontal → group left/right taps by rx
-    avg_rx_l = (rx1 + rx4) / 2;  avg_rx_r = (rx2 + rx3) / 2
-    # ABS_Y (ry) tracks vertical → group top/bottom taps by ry
-    avg_ry_t = (ry1 + ry2) / 2;  avg_ry_b = (ry3 + ry4) / 2
-    sx_scale  = (tx_r - tx_l) / (avg_rx_r - avg_rx_l)
-    sx_offset = tx_l - avg_rx_l * sx_scale
-    sy_scale  = (ty_b - ty_t) / (avg_ry_b - avg_ry_t)
-    sy_offset = ty_t - avg_ry_t * sy_scale
+    # ABS_Y (ry) → screen_x: group left/right taps by ry
+    avg_ry_l = (ry1 + ry4) / 2;  avg_ry_r = (ry2 + ry3) / 2
+    # ABS_X (rx) → screen_y: group top/bottom taps by rx
+    avg_rx_t = (rx1 + rx2) / 2;  avg_rx_b = (rx3 + rx4) / 2
+    sx_scale  = (tx_r - tx_l) / (avg_ry_r - avg_ry_l)
+    sx_offset = tx_l - avg_ry_l * sx_scale
+    sy_scale  = (ty_b - ty_t) / (avg_rx_b - avg_rx_t)
+    sy_offset = ty_t - avg_rx_t * sy_scale
     _calib = dict(sx_scale=sx_scale, sx_offset=sx_offset,
                   sy_scale=sy_scale, sy_offset=sy_offset)
     save_calibration()
@@ -1290,15 +1291,15 @@ def run_calibration():
     tx_l, tx_r = _CALIB_TARGETS[0][0], _CALIB_TARGETS[1][0]  # 30, 290
     ty_t, ty_b = _CALIB_TARGETS[0][1], _CALIB_TARGETS[2][1]  # 30, 210
 
-    avg_rx_left  = (rx1 + rx4) / 2   # ABS_X for left-side taps (TL, BL)
-    avg_rx_right = (rx2 + rx3) / 2   # ABS_X for right-side taps (TR, BR)
-    avg_ry_top   = (ry1 + ry2) / 2   # ABS_Y for top taps (TL, TR)
-    avg_ry_bot   = (ry3 + ry4) / 2   # ABS_Y for bottom taps (BR, BL)
+    avg_ry_left  = (ry1 + ry4) / 2   # ABS_Y for left-side taps (TL, BL)
+    avg_ry_right = (ry2 + ry3) / 2   # ABS_Y for right-side taps (TR, BR)
+    avg_rx_top   = (rx1 + rx2) / 2   # ABS_X for top taps (TL, TR)
+    avg_rx_bot   = (rx3 + rx4) / 2   # ABS_X for bottom taps (BR, BL)
 
-    sx_scale  = (tx_r - tx_l) / (avg_rx_right - avg_rx_left)
-    sx_offset = tx_l - avg_rx_left * sx_scale
-    sy_scale  = (ty_b - ty_t) / (avg_ry_bot - avg_ry_top)
-    sy_offset = ty_t - avg_ry_top * sy_scale
+    sx_scale  = (tx_r - tx_l) / (avg_ry_right - avg_ry_left)
+    sx_offset = tx_l - avg_ry_left * sx_scale
+    sy_scale  = (ty_b - ty_t) / (avg_rx_bot - avg_rx_top)
+    sy_offset = ty_t - avg_rx_top * sy_scale
 
     _calib = dict(sx_scale=sx_scale, sx_offset=sx_offset,
                   sy_scale=sy_scale, sy_offset=sy_offset)
