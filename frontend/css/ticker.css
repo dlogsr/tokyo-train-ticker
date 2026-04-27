@@ -47,14 +47,14 @@ html, body {
 
 .station-ja {
   font-family: 'Noto Sans JP', sans-serif;
-  font-size: 13px;
+  font-size: 10px;
   color: #666;
   margin-right: 4px;
 }
 
 .station-en {
   font-family: 'Press Start 2P', monospace;
-  font-size: 13px;
+  font-size: 10px;
   color: #ddd;
   letter-spacing: 0px;
   text-shadow: 0 0 6px rgba(255,255,255,0.4);
@@ -66,7 +66,7 @@ html, body {
 
 #clock {
   font-family: 'Share Tech Mono', monospace;
-  font-size: 13px;
+  font-size: 10px;
   color: #555;
   letter-spacing: 0.5px;
   white-space: nowrap;
@@ -121,7 +121,7 @@ html, body {
   align-items: center;
   justify-content: center;
   font-family: 'Press Start 2P', monospace;
-  font-size: 28px;
+  font-size: 22px;
   color: #000;
   /* shape + background set inline via JS */
   transition: background 0.3s, box-shadow 0.3s;
@@ -151,7 +151,7 @@ html, body {
 
 #next-line-name {
   font-family: 'Share Tech Mono', monospace;
-  font-size: 12px;
+  font-size: 10px;
   color: #555;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -200,7 +200,7 @@ html, body {
 
 #next-dest {
   font-family: 'Press Start 2P', monospace;
-  font-size: 16px;
+  font-size: 13px;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
@@ -213,7 +213,7 @@ html, body {
 /* Kanji destination prefix in hero card */
 .dest-ja {
   font-family: 'Noto Sans JP', sans-serif;
-  font-size: 17px;
+  font-size: 13px;
   color: #967830;
   flex-shrink: 0;
 }
@@ -221,7 +221,7 @@ html, body {
 /* Kanji destination prefix in list rows */
 .dest-ja-row {
   font-family: 'Noto Sans JP', sans-serif;
-  font-size: 14px;
+  font-size: 11px;
   color: #6b521a;
   margin-right: 2px;
 }
@@ -234,7 +234,7 @@ html, body {
 
 #next-eta {
   font-family: 'Press Start 2P', monospace;
-  font-size: 28px;
+  font-size: 22px;
   /* color set inline */
 }
 
@@ -282,7 +282,7 @@ html, body {
 
 .plt-btn {
   font-family: 'Share Tech Mono', monospace;
-  font-size: 14px;
+  font-size: 11px;
   background: transparent;
   border: none;
   color: #555;
@@ -330,7 +330,7 @@ html, body {
 .board-row {
   display: flex;
   align-items: center;
-  height: 22px;
+  height: 18px;
   padding: 0 4px 0 2px;
   border-bottom: 1px solid #0e0e0e;
   /* border-left color set inline by JS */
@@ -341,7 +341,7 @@ html, body {
 
 .train-row .col-dest {
   font-family: 'Share Tech Mono', monospace;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: bold;
   white-space: nowrap;
   overflow: hidden;
