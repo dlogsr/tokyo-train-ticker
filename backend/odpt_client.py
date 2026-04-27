@@ -158,7 +158,7 @@ class ODPTClient:
             except Exception:
                 results.extend(self._demo_line_trains(station_id, line_code))
         results.sort(key=lambda x: x["eta_min"])
-        return results[:16]
+        return results[:16] if results else self._demo_station_trains(station_id)
 
     async def get_trains_on_line(self, line_code: str) -> list:
         """Return all current trains on a line."""
@@ -183,7 +183,7 @@ class ODPTClient:
                     "destination": self._station_display_name(dest).upper(),
                     "delay_min": (t.get("odpt:delay", 0) or 0) // 60,
                 })
-            return results
+            return results or self._demo_line_all_trains(line_code)
         except Exception:
             return self._demo_line_all_trains(line_code)
 
