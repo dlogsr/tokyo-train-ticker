@@ -421,7 +421,7 @@ html, body {
 }
 
 /* ── Line tracker ───────────────────────────────────────────────────────── */
-#line-tracker { overflow: hidden; }
+#line-tracker { overflow: hidden; display: flex; flex-direction: column; }
 
 #tracker-line-name {
   height: 22px;
@@ -443,10 +443,22 @@ html, body {
 }
 #tracker-trains::-webkit-scrollbar { display: none; }
 
+#tracker-hero {
+  height: 88px;
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid #1a1a1a;
+  background: rgba(0,0,0,0.5);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
 .tracker-train {
   padding: 5px 6px 4px;
   border-bottom: 1px solid #111;
+  cursor: pointer;
 }
+.tracker-train:hover { background: rgba(255,255,255,0.04); }
 .tracker-train-header {
   display: flex;
   align-items: center;
@@ -509,7 +521,7 @@ html, body {
 #station-results::-webkit-scrollbar, #line-results::-webkit-scrollbar { display: none; }
 
 .picker-item {
-  padding: 5px 6px;
+  padding: 3px 6px;
   font-size: 13px;
   cursor: pointer;
   border-bottom: 1px solid #0e0e0e;

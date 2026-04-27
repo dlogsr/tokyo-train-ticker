@@ -298,13 +298,15 @@ state = {
     "picker_type":    None,
     "picker_results": [],
     "picker_scroll":  0,
-    "list_scroll":    0,
+    "list_scroll":      0,
+    "line_selected_idx": -1,
     "confirm_exit":   False,
 }
 
 _hold_start_time: float = 0.0
 _hold_pos: tuple = (0, 0)
 _hold_consumed: bool = False
+_current_img = None
 _service_start_time: float = 0.0
 _last_tap_pos = None
 _last_tap_time: float = 0.0
@@ -758,6 +760,60 @@ def draw_upcoming_list(draw, top_y):
         draw.line([0, row_y+ROW_H-1, SCREEN_W, row_y+ROW_H-1], fill=BORDER)
         row_y += ROW_H
 
+def draw_line_hero(draw, img, train, line_obj):
+    color    = hex_to_rgb(line_obj.get("color", "#888"))
+    bright   = brighten(color)
+    shape    = line_obj.get("shape", "rect")
+    lc       = state["line_code"]
+    operator = line_obj.get("operator", "")
+    top      = HERO_TOP + 24
+
+    draw.rectangle([0, top, SCREEN_W, HERO_BOT], fill=(5, 5, 5))
+    draw.line([0, HERO_BOT, SCREEN_W, HERO_BOT], fill=BORDER)
+
+    badge_size = 42
+    bx = (100 - badge_size) // 2
+    by = top + 3
+    rgb_bg = color
+    rgb_fg = hex_to_rgb(line_obj.get("text_color", "#ffffff"))
+    if shape == "circle":
+        draw.ellipse([bx, by, bx+badge_size, by+badge_size], fill=rgb_bg)
+    elif shape == "square":
+        draw.rectangle([bx, by, bx+badge_size, by+badge_size], fill=rgb_bg)
+    else:
+        draw.rounded_rectangle([bx, by, bx+badge_size, by+badge_size],
+                                radius=max(3, badge_size//8), fill=rgb_bg)
+    f_code = get_font("md")
+    lw = text_w(draw, lc, f_code)
+    draw.text((bx + (badge_size-lw)//2, by + (badge_size-f_code.size)//2),
+              lc, font=f_code, fill=rgb_fg)
+
+    logo_y = by + badge_size + 2
+    if operator in _op_logos:
+        logo_img = _op_logos[operator]
+        lw_l, lh_l = logo_img.size
+        paste_y = logo_y
+        if paste_y + lh_l <= HERO_BOT + 4:
+            img.paste(logo_img, (bx + (badge_size - lw_l)//2, paste_y))
+
+    rx = 104
+    num = f"#{train.get('train_number','')}"
+    draw.text((rx, top + 4), num, font=get_font("xs"), fill=DIM)
+    if train.get("delay_min", 0) > 0:
+        ds = f"+{train['delay_min']}m"
+        dw = text_w(draw, ds, get_font("xs"))
+        draw.text((SCREEN_W - dw - 4, top + 4), ds, font=get_font("xs"), fill=ORANGE)
+    dest_en = ("→ " + train.get("destination", "")).upper()
+    draw_dest(draw, rx, top + 17, dest_en, get_font("sm"), bright, max_w=210)
+    from_s = train.get("from_station", "").upper()[:9]
+    to_s   = train.get("to_station",   "").upper()[:9]
+    if from_s or to_s:
+        f_xxs = get_font("xxs")
+        fy = top + 36
+        pos_str = f"{from_s} → {to_s}" if from_s and to_s else (from_s or to_s)
+        draw.text((rx, fy), pos_str, font=f_xxs, fill=(80, 80, 80))
+
+
 def draw_line_tracker(draw):
     trains   = state["line_trains"]
     line_obj = next((l for l in state["all_lines"] if l["code"] == state["line_code"]), {})
@@ -783,43 +839,63 @@ def draw_line_tracker(draw):
     cw = text_w(draw, cnt, get_font("xs"))
     draw.text((SCREEN_W - cw - 4, HERO_TOP+8), cnt, font=get_font("xs"), fill=DIM)
 
-    row_y = HERO_TOP + 26
-    row_h = 34
-    f_xs  = get_font("xs")
-    f_sm  = get_font("sm")
-    for t in trains[:5]:
-        if row_y + row_h > FOOTER_Y:
-            break
-        bg = (10,10,10) if trains.index(t)%2==0 else BLACK
-        draw.rectangle([0, row_y, SCREEN_W, row_y+row_h], fill=bg)
-        draw.rectangle([0, row_y, 3, row_y+row_h], fill=color)
-        draw.line([0, row_y+row_h-1, SCREEN_W, row_y+row_h-1], fill=BORDER)
+    sel_idx = state["line_selected_idx"]
+    sel_train = trains[sel_idx] if 0 <= sel_idx < len(trains) else None
 
-        draw.text((6, row_y+2), f"#{t.get('train_number','')}", font=f_xs, fill=DIM)
-
-        dest_en = ("→ " + t.get("destination","")).upper()
-        draw_dest(draw, 6, row_y+14, dest_en, f_xs, bright, max_w=244)
-
-        if t.get("delay_min",0) > 0:
-            ds = f"+{t['delay_min']}m"
-            dw = text_w(draw, ds, f_xs)
-            draw.text((SCREEN_W-dw-4, row_y+2), ds, font=f_xs, fill=ORANGE)
-
-        from_s = t.get("from_station","").upper()[:7]
-        to_s   = t.get("to_station","").upper()[:7]
-        px = 4
-        py = row_y + 26
-        draw.text((px, py), from_s, font=f_xs, fill=(70,70,70))
-        px += text_w(draw, from_s, f_xs) + 3
-        draw.line([px, py+4, px+12, py+4], fill=(50,50,50))
-        px += 14
-        draw.ellipse([px-3, py+1, px+3, py+7], fill=color)
-        px += 7
-        draw.line([px, py+4, px+12, py+4], fill=(40,40,40))
-        px += 14
-        draw.text((px, py), to_s, font=f_xs, fill=(110,110,110))
-
-        row_y += row_h
+    if sel_train:
+        draw_line_hero(draw, _current_img, sel_train, line_obj)
+        row_y = HERO_BOT + 1
+        f_xs  = get_font("xs")
+        f_sm  = get_font("sm")
+        others = [t for i, t in enumerate(trains) if i != sel_idx]
+        for i, t in enumerate(others):
+            if row_y + ROW_H > FOOTER_Y:
+                break
+            bg = (10,10,10) if i % 2 == 0 else BLACK
+            draw.rectangle([0, row_y, SCREEN_W, row_y+ROW_H], fill=bg)
+            draw.rectangle([0, row_y, 3, row_y+ROW_H], fill=color)
+            num = f"#{t.get('train_number','')}"
+            draw.text((6, row_y+4), num, font=f_xs, fill=DIM)
+            dest_en = ("→ " + t.get("destination","")).upper()
+            draw_dest(draw, 6 + text_w(draw, num, f_xs) + 6, row_y+4, dest_en, f_xs, bright, max_w=196)
+            if t.get("delay_min",0) > 0:
+                ds = f"+{t['delay_min']}m"
+                dw = text_w(draw, ds, f_xs)
+                draw.text((SCREEN_W-dw-4, row_y+4), ds, font=f_xs, fill=ORANGE)
+            draw.line([0, row_y+ROW_H-1, SCREEN_W, row_y+ROW_H-1], fill=BORDER)
+            row_y += ROW_H
+    else:
+        row_y = HERO_TOP + 26
+        row_h = 34
+        f_xs  = get_font("xs")
+        f_sm  = get_font("sm")
+        for t in trains[:5]:
+            if row_y + row_h > FOOTER_Y:
+                break
+            bg = (10,10,10) if trains.index(t)%2==0 else BLACK
+            draw.rectangle([0, row_y, SCREEN_W, row_y+row_h], fill=bg)
+            draw.rectangle([0, row_y, 3, row_y+row_h], fill=color)
+            draw.line([0, row_y+row_h-1, SCREEN_W, row_y+row_h-1], fill=BORDER)
+            draw.text((6, row_y+2), f"#{t.get('train_number','')}", font=f_xs, fill=DIM)
+            dest_en = ("→ " + t.get("destination","")).upper()
+            draw_dest(draw, 6, row_y+14, dest_en, f_xs, bright, max_w=244)
+            if t.get("delay_min",0) > 0:
+                ds = f"+{t['delay_min']}m"
+                dw = text_w(draw, ds, f_xs)
+                draw.text((SCREEN_W-dw-4, row_y+2), ds, font=f_xs, fill=ORANGE)
+            from_s = t.get("from_station","").upper()[:7]
+            to_s   = t.get("to_station","").upper()[:7]
+            px = 4; py = row_y + 26
+            draw.text((px, py), from_s, font=f_xs, fill=(70,70,70))
+            px += text_w(draw, from_s, f_xs) + 3
+            draw.line([px, py+4, px+12, py+4], fill=(50,50,50))
+            px += 14
+            draw.ellipse([px-3, py+1, px+3, py+7], fill=color)
+            px += 7
+            draw.line([px, py+4, px+12, py+4], fill=(40,40,40))
+            px += 14
+            draw.text((px, py), to_s, font=f_xs, fill=(110,110,110))
+            row_y += row_h
 
 def draw_picker(draw):
     draw.rectangle([0, HERO_TOP, SCREEN_W, FOOTER_Y], fill=(4,4,4))
@@ -1092,8 +1168,9 @@ def process_touch(x, y):
                 state["mode"]            = "station"
                 state["platform_filter"] = "ALL"
             else:
-                state["line_code"] = item["code"]
-                state["mode"]      = "line"
+                state["line_code"]        = item["code"]
+                state["mode"]             = "line"
+                state["line_selected_idx"] = -1
             threading.Thread(target=refresh_data, daemon=True).start()
         state["list_scroll"] = 0
         return
@@ -1115,13 +1192,37 @@ def process_touch(x, y):
         state["plt_popup_open"] = True
         return
 
+    # LINE mode: tap hero to deselect, tap row to select
+    if state["mode"] == "line":
+        trains = state["line_trains"]
+        sel = state["line_selected_idx"]
+        if sel >= 0 and HERO_TOP + 24 <= y <= HERO_BOT:
+            state["line_selected_idx"] = -1
+            return
+        list_top = HERO_BOT if sel >= 0 else HERO_TOP + 26
+        row_h    = ROW_H    if sel >= 0 else 34
+        idx = (y - list_top) // row_h
+        if sel >= 0:
+            others = [i for i in range(len(trains)) if i != sel]
+            if 0 <= idx < len(others):
+                state["line_selected_idx"] = others[idx]
+        else:
+            if 0 <= idx < len(trains):
+                state["line_selected_idx"] = idx
+        return
+
 def process_scroll(dy):
     if state["picker_open"]:
-        row_h   = 24 if state["picker_type"] == "station" else 36
-        visible = 8  if state["picker_type"] == "station" else 5
-        delta   = -round(dy / row_h)
+        visible = 8 if state["picker_type"] == "station" else 5
+        delta   = -round(dy / 10)
         limit   = max(0, len(state["picker_results"]) - visible)
         state["picker_scroll"] = max(0, min(limit, state["picker_scroll"] + delta))
+    elif state["mode"] == "line" and state["line_selected_idx"] >= 0:
+        trains  = state["line_trains"]
+        n_other = max(0, len(trains) - 1)
+        delta   = -round(dy / ROW_H)
+        limit   = max(0, n_other - 4)
+        state["list_scroll"] = max(0, min(limit, state["list_scroll"] + delta))
     elif state["mode"] == "station":
         trains  = state["station_trains"]
         pf      = state["platform_filter"]
@@ -1172,6 +1273,7 @@ def main():
 
             img  = Image.new("RGB", (SCREEN_W, SCREEN_H), BLACK)
             draw = ImageDraw.Draw(img)
+            _current_img = img
 
             draw_header(draw)
 

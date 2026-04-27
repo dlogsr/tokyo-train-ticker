@@ -111,6 +111,8 @@ const app = (() => {
   let currentStation = 'shibuya';
   let currentLine = 'JY';
   let currentPlatform = 'ALL';
+  let selectedLineTrain = null;
+  let _lineTrainsCache = [];
   let allStations = [];
   let allLines = [];
   let clockInterval = null;
@@ -259,6 +261,7 @@ const app = (() => {
 
   function selectLine(lineCode) {
     currentLine = lineCode;
+    renderLineHero(null, null);
     const devSel = document.getElementById('dev-line-select');
     if (devSel) devSel.value = lineCode;
     if (mode === 'line') refresh();
@@ -457,18 +460,27 @@ const app = (() => {
       <span style="font-size:8px;color:#333;margin-left:auto;font-family:'Share Tech Mono',monospace">${trains.length} trains</span>
     `;
 
+    _lineTrainsCache = trains;
+
+    // Keep hero in sync on data refresh
+    if (selectedLineTrain) {
+      const updated = trains.find(t => t.train_number === selectedLineTrain.train_number);
+      renderLineHero(updated || null, line);
+    }
+
     const container = document.getElementById('tracker-trains');
     if (!trains || trains.length === 0) {
       container.innerHTML = '<div style="color:#444;font-size:10px;padding:10px 6px">No train data</div>';
       return;
     }
 
-    container.innerHTML = trains.slice(0, 12).map(t => {
+    container.innerHTML = trains.slice(0, 12).map((t, i) => {
       const delayStr = t.delay_min > 0 ? `<span class="tracker-delay">+${t.delay_min}min</span>` : '';
       const destKey = (t.destination || '').toUpperCase();
       const jaSpan = DEST_JA[destKey] ? `<span class="tracker-dest-ja">${DEST_JA[destKey]}</span>` : '';
       const progress = buildProgressBar(t, line);
-      return `<div class="tracker-train">
+      const isSelected = selectedLineTrain && selectedLineTrain.train_number === t.train_number;
+      return `<div class="tracker-train${isSelected ? ' selected' : ''}" onclick="app._selectLineTrain(${i})" style="${isSelected ? `border-left:3px solid ${line.color}` : ''}">
         <div class="tracker-train-header">
           <span class="tracker-train-num">#${t.train_number}</span>
           <span class="tracker-dest" style="color:${brighten(t.color)}">${jaSpan}&rarr; ${t.destination}</span>
@@ -477,6 +489,61 @@ const app = (() => {
         ${progress}
       </div>`;
     }).join('');
+  }
+
+  function _selectLineTrain(idx) {
+    const line = allLines.find(l => l.code === currentLine);
+    if (!line) return;
+    const train = _lineTrainsCache[idx];
+    if (!train) return;
+    if (selectedLineTrain && selectedLineTrain.train_number === train.train_number) {
+      renderLineHero(null, line);
+    } else {
+      renderLineHero(train, line);
+    }
+  }
+
+  function renderLineHero(train, line) {
+    const hero = document.getElementById('tracker-hero');
+    selectedLineTrain = train;
+    if (!train || !line) {
+      hero.classList.add('hidden');
+      hero.innerHTML = '';
+      return;
+    }
+    const shape = line.shape || 'rect';
+    const br = shape === 'circle' ? '50%' : shape === 'square' ? '2px' : '5px';
+    const opIcon = operatorIconHTML(line.operator);
+    const jaPrefix = destJaPrefix(train.destination);
+    const from = (train.from_station || '').toUpperCase();
+    const to   = (train.to_station   || '').toUpperCase();
+    const posHtml = (from || to)
+      ? `<div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${from} → ${to}</div>`
+      : '';
+    const delayHtml = train.delay_min > 0
+      ? `<span style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#e87722">+${train.delay_min}min</span>`
+      : '';
+
+    hero.innerHTML = `
+      <div style="width:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:6px;flex-shrink:0">
+        <div style="width:58px;height:58px;display:flex;align-items:center;justify-content:center;
+                    background:${line.color};color:${line.text_color};
+                    font-family:'Press Start 2P',monospace;font-size:18px;border-radius:${br};
+                    box-shadow:0 0 10px ${line.color}66">
+          ${line.code}
+        </div>
+        ${opIcon}
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:6px 8px 6px 0;gap:3px;overflow:hidden;min-width:0">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#444">#${train.train_number || '—'}</div>
+        <div style="display:flex;align-items:baseline;gap:3px;overflow:hidden">
+          ${jaPrefix}<span style="font-family:'Press Start 2P',monospace;font-size:11px;color:${brighten(line.color)};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">→ ${truncate(train.destination, 10)}</span>
+        </div>
+        ${posHtml}
+        ${delayHtml}
+      </div>
+    `;
+    hero.classList.remove('hidden');
   }
 
   function buildProgressBar(train, line) {
@@ -591,7 +658,7 @@ const app = (() => {
     return `rgb(${r},${g},${b})`;
   }
 
-  return { init, setMode, selectStation, selectLine, selectPlatform, togglePltPopup, openStationPicker, openLinePicker, _pickStation, _pickLine };
+  return { init, setMode, selectStation, selectLine, selectPlatform, togglePltPopup, openStationPicker, openLinePicker, _pickStation, _pickLine, _selectLineTrain };
 })();
 
 document.addEventListener('DOMContentLoaded', () => {
