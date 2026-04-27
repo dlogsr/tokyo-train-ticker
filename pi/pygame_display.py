@@ -33,19 +33,12 @@ FPS      = 4
 
 # ── Backlight ─────────────────────────────────────────────────────────────────
 BACKLIGHT_GPIO = 18
-BRIGHT_FULL    = 255   # 100% — adjust down if too bright
-BRIGHT_DIM     = 20    # ~8%  — idle dim level
-DIM_AFTER      = 120   # seconds idle before dimming
+BRIGHTNESS     = 128   # 0–255, set to taste
 
 _PWM_CHIP      = "/sys/class/pwm/pwmchip0"
 _PWM_PERIOD_NS = 1_000_000   # 1 kHz
 
-_backlight_ok          = False
-_last_activity: float  = 0.0
-_is_dimmed: bool       = False
-
 def _init_backlight():
-    global _backlight_ok
     try:
         if not os.path.exists(f"{_PWM_CHIP}/pwm0"):
             with open(f"{_PWM_CHIP}/export", "w") as f:
@@ -53,39 +46,22 @@ def _init_backlight():
             time.sleep(0.15)
         with open(f"{_PWM_CHIP}/pwm0/period", "w") as f:
             f.write(str(_PWM_PERIOD_NS))
-        duty = round(BRIGHT_FULL * _PWM_PERIOD_NS / 255)
+        duty = round(BRIGHTNESS * _PWM_PERIOD_NS / 255)
         with open(f"{_PWM_CHIP}/pwm0/duty_cycle", "w") as f:
             f.write(str(duty))
         with open(f"{_PWM_CHIP}/pwm0/enable", "w") as f:
             f.write("1")
-        _backlight_ok = True
-        print("Backlight: hardware PWM OK")
+        print(f"Backlight: {BRIGHTNESS}/255")
     except Exception as e:
         print(f"Backlight init: {e} — solder #18 jumper + add dtoverlay=pwm to config.txt")
 
 def set_backlight(level: int):
-    global _is_dimmed
-    if not _backlight_ok:
-        return
     duty = round(max(0, min(255, level)) * _PWM_PERIOD_NS / 255)
     try:
         with open(f"{_PWM_CHIP}/pwm0/duty_cycle", "w") as f:
             f.write(str(duty))
-    except Exception as e:
-        print(f"Backlight set error: {e}")
-    _is_dimmed = (level < BRIGHT_FULL)
-
-def wake_backlight():
-    global _last_activity, _is_dimmed
-    _last_activity = time.time()
-    if _is_dimmed:
-        set_backlight(BRIGHT_FULL)
-
-def check_backlight():
-    if not _backlight_ok or _is_dimmed:
-        return
-    if time.time() - _last_activity > DIM_AFTER:
-        set_backlight(BRIGHT_DIM)
+    except Exception:
+        pass
 
 # ── Layout constants ──────────────────────────────────────────────────────────
 HDR_H    = 22
@@ -221,7 +197,6 @@ def flush(img: Image.Image):
         print(f"fb write error: {e}")
 
 def _cleanup():
-    set_backlight(BRIGHT_FULL)
     if _fb is not None:
         try:
             _fb.seek(0)
@@ -1010,7 +985,6 @@ def handle_touch_events(q):
 
             if pressure > 0:
                 last_x, last_y = x, y
-                wake_backlight()
 
             if pressure > 0 and prev_pressure == 0:
                 start_x, start_y = x, y
@@ -1176,14 +1150,12 @@ def main():
     global _last_tap_pos, _last_tap_time, _service_start_time
     _service_start_time = time.time()
     _init_backlight()
-    wake_backlight()
 
     while True:
         try:
             t0 = time.time()
 
             check_hold()
-            check_backlight()
 
             while not _touch_q.empty():
                 try:
