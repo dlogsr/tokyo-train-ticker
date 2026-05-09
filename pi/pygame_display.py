@@ -301,6 +301,7 @@ state = {
     "list_scroll":      0,
     "line_selected_idx": -1,
     "confirm_exit":   False,
+    "btn_cursor":     0,
 }
 
 _hold_start_time: float = 0.0
@@ -909,14 +910,23 @@ def draw_picker(draw):
     f_xs    = get_font("xs")
     list_top = HERO_TOP + 14
 
+    btn_cursor = state["btn_cursor"] if _btn_nav_active else -1
+
     if state["picker_type"] == "station":
         row_h = 24
         row_y = list_top
-        for item in results[scroll:scroll+8]:
+        for rel_i, item in enumerate(results[scroll:scroll+8]):
             if row_y + row_h > FOOTER_Y:
                 break
-            bg = (12,12,12) if results.index(item)%2==0 else (8,8,8)
+            abs_i     = scroll + rel_i
+            is_cursor = abs_i == btn_cursor
+            if is_cursor:
+                bg = (50, 42, 14)
+            else:
+                bg = (12,12,12) if abs_i%2==0 else (8,8,8)
             draw.rectangle([0, row_y, SCREEN_W, row_y+row_h], fill=bg)
+            if is_cursor:
+                draw.rectangle([0, row_y, 3, row_y+row_h], fill=YELLOW)
             ja = item.get("name_ja", "")
             if ja:
                 f_cjk = get_cjk_font(13)
@@ -924,7 +934,8 @@ def draw_picker(draw):
                 jw = text_w(draw, ja, f_cjk) + 5
             else:
                 jw = 0
-            draw_text(draw, 4 + jw, row_y+5, item["name_en"].upper(), f_sm, WHITE, max_w=140 - jw)
+            draw_text(draw, 4 + jw, row_y+5, item["name_en"].upper(), f_sm,
+                      WHITE if not is_cursor else YELLOW, max_w=140 - jw)
             bx = 190
             for lc in item.get("lines",[])[:6]:
                 lo = next((l for l in state["all_lines"] if l["code"]==lc), None)
@@ -945,12 +956,21 @@ def draw_picker(draw):
                 row_y += row_h
             if row_y + row_h > FOOTER_Y:
                 break
-            bg = (12,12,12) if i%2==0 else (8,8,8)
+            abs_i     = scroll + i
+            is_cursor = abs_i == btn_cursor
+            if is_cursor:
+                bg = (50, 42, 14)
+            else:
+                bg = (12,12,12) if i%2==0 else (8,8,8)
             draw.rectangle([rx, row_y, rx+col_w-3, row_y+row_h-2], fill=bg)
+            if is_cursor:
+                draw.rounded_rectangle([rx, row_y, rx+col_w-3, row_y+row_h-2],
+                                       radius=2, outline=YELLOW)
             bw = draw_badge(draw, rx+4, row_y+5, item["code"],
                             item["color"], item["text_color"], item["shape"], 18)
             short = item.get("short", item["code"])[:7]
-            draw_text(draw, rx+4, row_y+26, short, f_xs, DIM, max_w=col_w-8)
+            draw_text(draw, rx+4, row_y+26, short, f_xs,
+                      WHITE if is_cursor else DIM, max_w=col_w-8)
 
 FOOTER_BUTTONS = [("STN", "station"), ("LINE", "line"), ("PICK", "pick")]
 
@@ -1090,6 +1110,11 @@ def handle_touch_events(q):
 
 import queue as _queue
 _touch_q = _queue.Queue()
+_btn_q   = _queue.Queue()
+_btn_nav_active = False
+
+# PiTFT 2.8" physical button GPIO pins (BCM numbering, active-LOW)
+_BTN_PINS = {1: 17, 2: 22, 3: 23, 4: 27}  # up, down, back/STN, confirm
 
 def check_hold():
     global _hold_start_time, _hold_consumed
@@ -1102,6 +1127,111 @@ def check_hold():
             _hold_consumed = True
             _hold_start_time = 0.0
             process_long_press(*_hold_pos)
+
+def handle_button_events():
+    try:
+        import RPi.GPIO as GPIO
+    except ImportError:
+        print("RPi.GPIO not available — physical buttons disabled")
+        return
+
+    GPIO.setmode(GPIO.BCM)
+    for pin in _BTN_PINS.values():
+        GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+    DEBOUNCE = 0.15
+    last  = {pin: 0.0  for pin in _BTN_PINS.values()}
+    prev  = {pin: True for pin in _BTN_PINS.values()}  # True = HIGH = not pressed
+
+    print("GPIO buttons ready: B1=GPIO17(up) B2=GPIO22(down) B3=GPIO23(back) B4=GPIO27(confirm)")
+    while True:
+        now = time.time()
+        for btn_num, pin in _BTN_PINS.items():
+            cur = bool(GPIO.input(pin))
+            if not cur and prev[pin] and (now - last[pin]) > DEBOUNCE:
+                last[pin] = now
+                _btn_q.put(btn_num)
+            prev[pin] = cur
+        time.sleep(0.02)
+
+
+def process_button(btn: int):
+    """btn 1=up  2=down  3=back/STN  4=confirm"""
+    global _btn_nav_active
+
+    if btn == 3:
+        state["mode"] = "station"
+        state["picker_open"] = False
+        state["plt_popup_open"] = False
+        state["platform_filter"] = "ALL"
+        state["btn_cursor"] = 0
+        _btn_nav_active = False
+        threading.Thread(target=refresh_data, daemon=True).start()
+        return
+
+    _btn_nav_active = True
+
+    if state["picker_open"]:
+        results = state["picker_results"]
+        n = len(results)
+        if n == 0:
+            return
+        cursor = state["btn_cursor"]
+
+        if btn in (1, 2):
+            cursor = max(0, min(n - 1, cursor + (1 if btn == 2 else -1)))
+            state["btn_cursor"] = cursor
+
+            if state["picker_type"] == "station":
+                visible = 8
+                state["picker_scroll"] = max(0, min(max(0, n - visible),
+                                                     cursor - visible // 2))
+            else:
+                # Line grid (3 cols): scroll whole rows, keep cursor row near centre
+                cursor_row  = cursor // 3
+                n_rows      = (n + 2) // 3
+                first_row   = max(0, min(max(0, n_rows - 4), cursor_row - 1))
+                state["picker_scroll"] = first_row * 3
+
+        elif btn == 4:
+            item = results[cursor]
+            state["picker_open"] = False
+            state["btn_cursor"]  = 0
+            _btn_nav_active = False
+            if state["picker_type"] == "station":
+                state["station_id"]      = item["id"]
+                state["station_en"]      = item["name_en"].upper()
+                state["station_ja"]      = item.get("name_ja", "")
+                state["mode"]            = "station"
+                state["platform_filter"] = "ALL"
+            else:
+                state["line_code"]        = item["code"]
+                state["mode"]             = "line"
+                state["line_selected_idx"] = -1
+            threading.Thread(target=refresh_data, daemon=True).start()
+
+    elif state["mode"] == "station":
+        if btn in (1, 2):
+            trains  = state["station_trains"]
+            pf      = state["platform_filter"]
+            visible = [t for t in trains
+                       if pf == "ALL" or str(t.get("platform", "")) == pf]
+            limit   = max(0, len(visible) - 1 - 3)
+            state["list_scroll"] = max(0, min(limit,
+                                              state["list_scroll"] + (1 if btn == 2 else -1)))
+
+    elif state["mode"] == "line":
+        trains = state["line_trains"]
+        n = len(trains)
+        if n == 0:
+            return
+        sel = state["line_selected_idx"]
+
+        if btn == 2:
+            state["line_selected_idx"] = 0 if sel < 0 else min(n - 1, sel + 1)
+        elif btn == 1:
+            state["line_selected_idx"] = -1 if sel <= 0 else sel - 1
+
 
 def draw_tap_indicator(draw):
     if _last_tap_pos is None:
@@ -1122,6 +1252,9 @@ def process_long_press(x, y):
             state["confirm_exit"] = True
 
 def process_touch(x, y):
+    global _btn_nav_active
+    _btn_nav_active = False
+
     if state["confirm_exit"]:
         if 40 <= x <= 140 and 110 <= y <= 150:   # EXIT
             import subprocess
@@ -1239,6 +1372,7 @@ def main():
 
     threading.Thread(target=background_loop, daemon=True).start()
     threading.Thread(target=handle_touch_events, args=(_touch_q,), daemon=True).start()
+    threading.Thread(target=handle_button_events, daemon=True).start()
 
     import atexit
     atexit.register(_cleanup)
@@ -1270,6 +1404,12 @@ def main():
                         process_scroll(event[1])
                 except Exception as e:
                     print(f"touch event error: {e}", flush=True)
+
+            while not _btn_q.empty():
+                try:
+                    process_button(_btn_q.get_nowait())
+                except Exception as e:
+                    print(f"button event error: {e}", flush=True)
 
             img  = Image.new("RGB", (SCREEN_W, SCREEN_H), BLACK)
             draw = ImageDraw.Draw(img)
