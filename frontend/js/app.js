@@ -117,6 +117,10 @@ const app = (() => {
   let allLines = [];
   let clockInterval = null;
 
+  // ── Button navigation state ───────────────────────────────────────────────
+  let btnNavActive = false;
+  let btnCursor = 0;
+
   // ── Init ─────────────────────────────────────────────────────────────────────
 
   async function init() {
@@ -489,6 +493,7 @@ const app = (() => {
         ${progress}
       </div>`;
     }).join('');
+    updateCursorHighlight();
   }
 
   function _selectLineTrain(idx) {
@@ -564,13 +569,14 @@ const app = (() => {
   // ── Station picker ────────────────────────────────────────────────────────────
 
   function openStationPicker() {
+    btnCursor = 0;
     const overlay = document.getElementById('station-picker');
     overlay.classList.remove('hidden');
     const input = document.getElementById('station-search');
     input.value = '';
     renderStationResults('');
     setTimeout(() => input.focus(), 50);
-    input.oninput = () => renderStationResults(input.value);
+    input.oninput = () => { btnCursor = 0; renderStationResults(input.value); };
     input.onkeydown = e => { if (e.key === 'Escape') closeStationPicker(); };
   }
 
@@ -596,6 +602,7 @@ const app = (() => {
         <span class="picker-line-badges">${badges}</span>
       </div>`;
     }).join('');
+    updateCursorHighlight();
   }
 
   function _pickStation(id) { closeStationPicker(); selectStation(id); setMode('station'); }
@@ -603,6 +610,7 @@ const app = (() => {
   // ── Line picker ───────────────────────────────────────────────────────────────
 
   function openLinePicker() {
+    btnCursor = 0;
     document.getElementById('line-picker').classList.remove('hidden');
     document.getElementById('line-results').innerHTML = allLines.map(l =>
       `<div class="line-picker-item" onclick="app._pickLine('${l.code}')">
@@ -610,6 +618,7 @@ const app = (() => {
         <span class="lp-code">${truncate(l.short, 8)}</span>
       </div>`
     ).join('');
+    updateCursorHighlight();
   }
 
   function closeLinePicker() { document.getElementById('line-picker').classList.add('hidden'); }
@@ -639,6 +648,90 @@ const app = (() => {
     if (el) el.textContent = msg;
   }
 
+  // ── Sim / physical button navigation ─────────────────────────────────────
+
+  function updateCursorHighlight() {
+    document.querySelectorAll('.btn-cursor').forEach(el => el.classList.remove('btn-cursor'));
+    if (!btnNavActive) return;
+
+    const stPicker  = !document.getElementById('station-picker').classList.contains('hidden');
+    const linePicker = !document.getElementById('line-picker').classList.contains('hidden');
+
+    let items;
+    if (stPicker)       items = document.querySelectorAll('#station-results .picker-item');
+    else if (linePicker) items = document.querySelectorAll('#line-results .line-picker-item');
+    else if (mode === 'line') {
+      if (btnCursor < 0) return;
+      items = document.querySelectorAll('#tracker-trains .tracker-train');
+    } else {
+      return;
+    }
+    if (items && items[btnCursor]) {
+      items[btnCursor].classList.add('btn-cursor');
+      items[btnCursor].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }
+
+  function simButton(btn) {
+    const stPicker   = !document.getElementById('station-picker').classList.contains('hidden');
+    const linePicker = !document.getElementById('line-picker').classList.contains('hidden');
+
+    if (btn === 3) {
+      btnNavActive = false;
+      btnCursor = 0;
+      updateCursorHighlight();
+      closeStationPicker();
+      closeLinePicker();
+      setMode('station');
+      return;
+    }
+
+    btnNavActive = true;
+
+    if (stPicker) {
+      const items = document.querySelectorAll('#station-results .picker-item');
+      const n = items.length;
+      if (btn === 1)      btnCursor = Math.max(0, btnCursor - 1);
+      else if (btn === 2) btnCursor = Math.min(Math.max(0, n - 1), btnCursor + 1);
+      else if (btn === 4 && n > 0) {
+        items[Math.min(btnCursor, n - 1)].click();
+        return;
+      }
+      updateCursorHighlight();
+
+    } else if (linePicker) {
+      const items = document.querySelectorAll('#line-results .line-picker-item');
+      const n = items.length;
+      if (btn === 1)      btnCursor = Math.max(0, btnCursor - 1);
+      else if (btn === 2) btnCursor = Math.min(Math.max(0, n - 1), btnCursor + 1);
+      else if (btn === 4 && n > 0) {
+        items[Math.min(btnCursor, n - 1)].click();
+        return;
+      }
+      updateCursorHighlight();
+
+    } else if (mode === 'station') {
+      const list = document.getElementById('train-list');
+      if (btn === 1)      list.scrollTop -= 18;
+      else if (btn === 2) list.scrollTop += 18;
+
+    } else if (mode === 'line') {
+      const n = _lineTrainsCache.length;
+      if (n === 0) return;
+      const line = allLines.find(l => l.code === currentLine);
+      if (!line) return;
+
+      if (btn === 1) {
+        if (btnCursor <= 0) { btnCursor = -1; renderLineHero(null, line); }
+        else                { btnCursor--;    renderLineHero(_lineTrainsCache[btnCursor], line); }
+      } else if (btn === 2) {
+        btnCursor = btnCursor < 0 ? 0 : Math.min(n - 1, btnCursor + 1);
+        renderLineHero(_lineTrainsCache[btnCursor], line);
+      }
+      updateCursorHighlight();
+    }
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────────
 
   function truncate(str, n) {
@@ -658,17 +751,33 @@ const app = (() => {
     return `rgb(${r},${g},${b})`;
   }
 
-  return { init, setMode, selectStation, selectLine, selectPlatform, togglePltPopup, openStationPicker, openLinePicker, _pickStation, _pickLine, _selectLineTrain };
+  return { init, setMode, selectStation, selectLine, selectPlatform, togglePltPopup, openStationPicker, openLinePicker, _pickStation, _pickLine, _selectLineTrain, simButton };
 })();
 
 document.addEventListener('DOMContentLoaded', () => {
   app.init();
+
   document.addEventListener('click', e => {
+    // Close plt popup when clicking outside
     const popup = document.getElementById('plt-popup');
     const trigger = document.getElementById('plt-trigger');
     if (popup && !popup.classList.contains('hidden') &&
         !popup.contains(e.target) && e.target !== trigger) {
       popup.classList.add('hidden');
     }
+    // Deactivate button-nav cursor on any non-sim-button click
+    if (!e.target.closest('#sim-buttons')) {
+      app.simButton && document.querySelectorAll('.btn-cursor')
+        .forEach(el => el.classList.remove('btn-cursor'));
+    }
+  });
+
+  // Keyboard shortcuts mirror the physical buttons
+  document.addEventListener('keydown', e => {
+    const inInput = document.activeElement && document.activeElement.tagName === 'INPUT';
+    if (e.key === 'ArrowUp'    && !inInput) { e.preventDefault(); app.simButton(1); }
+    if (e.key === 'ArrowDown'  && !inInput) { e.preventDefault(); app.simButton(2); }
+    if (e.key === 'Escape')                 { app.simButton(3); }
+    if (e.key === 'Enter')                  { e.preventDefault(); app.simButton(4); }
   });
 });

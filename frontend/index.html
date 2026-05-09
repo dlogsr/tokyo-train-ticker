@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="css/ticker.css">
 </head>
 <body>
+  <div id="screen-wrap">
   <div id="screen">
 
     <!-- ── Header ── -->
@@ -90,7 +91,17 @@
       <div id="demo-badge" class="demo-badge hidden">DEMO</div>
     </div>
 
+  </div><!-- #screen -->
+
+  <!-- Sim buttons (right side, mirrors PiTFT physical buttons) -->
+  <div id="sim-buttons" class="dev-only" style="display:flex">
+    <button class="sim-btn" onclick="app.simButton(1)" title="B1 · Up · GPIO 17 · ↑">▲</button>
+    <button class="sim-btn" onclick="app.simButton(2)" title="B2 · Down · GPIO 22 · ↓">▼</button>
+    <button class="sim-btn" onclick="app.simButton(3)" title="B3 · Back/STN · GPIO 23 · Esc">←</button>
+    <button class="sim-btn" onclick="app.simButton(4)" title="B4 · Confirm · GPIO 27 · Enter">↵</button>
   </div>
+
+  </div><!-- #screen-wrap -->
 
   <!-- Dev controls (outside 320×240) -->
   <div id="dev-controls" class="dev-only">
