@@ -50,6 +50,18 @@ make dev           # starts server + opens http://localhost:8000
 docker-compose up
 ```
 
+### Deploy to Railway
+
+This repo builds and runs as-is on [Railway](https://railway.app):
+
+1. Push this repo to GitHub (already done if you're reading this from there).
+2. On Railway: **New Project → Deploy from GitHub repo** and pick this repo.
+3. Railway detects the root `Dockerfile` and builds it automatically — no config needed.
+4. (Optional) Set the `ODPT_API_KEY` environment variable in the Railway service settings for live data; leave it unset to run in demo mode.
+5. Railway assigns a public URL and injects `PORT`, which the container already listens on.
+
+`railway.json` pins the build to the Dockerfile and adds a `/api/status` healthcheck.
+
 ## Configuration
 
 Copy `.env.example` to `.env` and edit:

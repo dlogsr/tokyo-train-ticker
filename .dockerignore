@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+.env
+*.log
+.DS_Store
+.git/
+.github/
+data/
+pi/
+docs/
+README.md
