@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">Tokyo Train Ticker</string>
+
+    <string name="settings_title">Connect to your backend</string>
+    <string name="settings_hint">e.g. https://your-app.up.railway.app or http://192.168.1.20:8000</string>
+    <string name="settings_label">Backend URL</string>
+    <string name="settings_connect">Connect</string>
+    <string name="settings_error_empty">Enter a backend URL first</string>
+    <string name="action_settings">Settings</string>
+
+    <string name="widget_configure_title">Choose a station</string>
+    <string name="widget_backend_label">Backend URL</string>
+    <string name="widget_station_label">Station</string>
+    <string name="widget_save">Save</string>
+    <string name="widget_loading">Loading stations…</string>
+    <string name="widget_load_failed">Couldn\'t reach backend — check the URL and try again</string>
+    <string name="widget_no_data">No data — tap to refresh</string>
+    <string name="widget_not_configured">Tap to set up</string>
+</resources>

@@ -1,0 +1,9 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.TokyoTrainTicker" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/ticker_accent</item>
+        <item name="colorPrimaryDark">@color/ticker_bg</item>
+        <item name="colorAccent">@color/ticker_accent</item>
+        <item name="android:windowBackground">@color/ticker_bg</item>
+        <item name="android:statusBarColor" tools:targetApi="21">@color/ticker_bg</item>
+    </style>
+</resources>

@@ -1,0 +1,8 @@
+<resources>
+    <color name="ticker_bg">#0D1117</color>
+    <color name="ticker_surface">#161B22</color>
+    <color name="ticker_accent">#39FF88</color>
+    <color name="ticker_text">#E6EDF3</color>
+    <color name="ticker_text_dim">#8B949E</color>
+    <color name="ic_launcher_background">#0D1117</color>
+</resources>

@@ -1,0 +1,41 @@
+<resources>
+    <!-- Row styles shared by widget_wide.xml (kept out of widget_compact.xml, which
+         has less room and sets sizes inline). -->
+    <style name="WidgetLineBadgeWide">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minWidth">32dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:paddingHorizontal">5dp</item>
+        <item name="android:paddingVertical">2dp</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="WidgetDestWide">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:layout_marginStart">8dp</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textColor">@color/ticker_text</item>
+    </style>
+
+    <style name="WidgetMetaWide">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginEnd">8dp</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:textColor">@color/ticker_text_dim</item>
+    </style>
+
+    <style name="WidgetEtaWide">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/ticker_accent</item>
+    </style>
+</resources>

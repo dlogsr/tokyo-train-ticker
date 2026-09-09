@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 4x2 layout: station name + up to 4 departures (line / destination / platform+delay / ETA). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widgetRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_background"
+    android:padding="10dp">
+
+    <LinearLayout
+        android:id="@+id/headerRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/stationName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:textColor="@color/ticker_text" />
+
+        <TextView
+            android:id="@+id/refreshButton"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:gravity="center"
+            android:text="↻"
+            android:textSize="16sp"
+            android:textColor="@color/ticker_accent" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/row1"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView android:id="@+id/row1Line" style="@style/WidgetLineBadgeWide" />
+        <TextView android:id="@+id/row1Dest" style="@style/WidgetDestWide" />
+        <TextView android:id="@+id/row1Meta" style="@style/WidgetMetaWide" />
+        <TextView android:id="@+id/row1Eta" style="@style/WidgetEtaWide" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/row2"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView android:id="@+id/row2Line" style="@style/WidgetLineBadgeWide" />
+        <TextView android:id="@+id/row2Dest" style="@style/WidgetDestWide" />
+        <TextView android:id="@+id/row2Meta" style="@style/WidgetMetaWide" />
+        <TextView android:id="@+id/row2Eta" style="@style/WidgetEtaWide" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/row3"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView android:id="@+id/row3Line" style="@style/WidgetLineBadgeWide" />
+        <TextView android:id="@+id/row3Dest" style="@style/WidgetDestWide" />
+        <TextView android:id="@+id/row3Meta" style="@style/WidgetMetaWide" />
+        <TextView android:id="@+id/row3Eta" style="@style/WidgetEtaWide" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/row4"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView android:id="@+id/row4Line" style="@style/WidgetLineBadgeWide" />
+        <TextView android:id="@+id/row4Dest" style="@style/WidgetDestWide" />
+        <TextView android:id="@+id/row4Meta" style="@style/WidgetMetaWide" />
+        <TextView android:id="@+id/row4Eta" style="@style/WidgetEtaWide" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/emptyText"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:textSize="12sp"
+        android:textColor="@color/ticker_text_dim"
+        android:visibility="gone" />
+</LinearLayout>

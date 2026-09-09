@@ -108,3 +108,42 @@ sudo systemctl status train-backend train-display
 | `make dev` | Start dev server with hot reload |
 | `make install` | Create venv and install dependencies |
 | `make stop` | Kill the running server |
+
+## Android App
+
+`android/` is a native Android wrapper around this same backend, plus a resizable
+home-screen widget:
+
+- **App** — a thin WebView shell that loads the existing `frontend/` UI from whatever
+  backend URL you point it at (a Railway deployment, or your Pi's LAN address).
+- **Widget** — a native home-screen widget, resizable between **2×2 and 4×2**, showing
+  next departures for one station. It's configured independently of the app (pick a
+  backend URL + station when you place it) and refreshes every 5 minutes, or on tap.
+
+### CI builds
+
+Every push to `android/**` runs [`.github/workflows/android.yml`](.github/workflows/android.yml),
+which builds a debug APK and uploads it as a workflow artifact (**Actions tab → latest
+run → Artifacts**). Pushing a tag like `android-v1` also attaches the APK to a GitHub
+Release. The debug build is signed with Gradle's auto-generated debug key — fine for
+sideloading onto your own device, not for the Play Store.
+
+### Build locally
+
+```bash
+cd android
+./gradlew assembleDebug
+# APK lands at app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Requires JDK 17+ and the Android SDK (`ANDROID_HOME`/`local.properties` → `sdk.dir`).
+
+### Using it
+
+1. Open the app once and enter your backend URL (e.g. your Railway URL, or
+   `http://192.168.1.20:8000` for a Pi on your LAN).
+2. Long-press the home screen → **Widgets** → **Tokyo Train Ticker** → drag it out,
+   which opens the station picker (same backend URL + a station from `/api/stations`).
+3. Drag the widget's side handles to resize between 2×2 and 4×2 — the layout switches
+   automatically (3 departure rows at 2×2, 4 rows with platform/delay at 4×2).
