@@ -147,13 +147,14 @@ class ODPTClient:
             line = LINES.get(line_code, {})
             try:
                 trains = await self._get_trains_for_railway(line.get("odpt", ""))
+                line_results = []
                 for t in trains:
                     from_st = t.get("odpt:fromStation", "")
                     to_st = t.get("odpt:toStation", "")
                     dest_list = t.get("odpt:destinationStation", [])
                     dest = (dest_list[0] if dest_list else to_st) or ""
                     if odpt_station_id in (from_st, to_st):
-                        results.append({
+                        line_results.append({
                             "line_code": line_code,
                             "line_name": line.get("short", line_code),
                             "color": line.get("color", "#ffffff"),
@@ -166,6 +167,7 @@ class ODPTClient:
                             "eta_min": 1,
                             "direction": t.get("odpt:railDirection", ""),
                         })
+                results.extend(line_results or self._demo_line_trains(station_id, line_code))
             except Exception:
                 results.extend(self._demo_line_trains(station_id, line_code))
         results.sort(key=lambda x: x["eta_min"])
