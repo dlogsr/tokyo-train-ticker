@@ -12,7 +12,7 @@ import httpx
 
 from line_data import LINES, STATIONS
 
-ODPT_BASE = "https://api.odpt.org/api/4"
+ODPT_BASE = "https://api.odpt.org/api/v4"
 JST = timezone(timedelta(hours=9))
 
 # Typical headways in minutes per line (peak / off-peak)
