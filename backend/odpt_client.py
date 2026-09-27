@@ -135,6 +135,34 @@ class ODPTClient:
         parts = raw.split(".")
         return parts[-1] if parts else raw
 
+    async def _station_line_trains(self, station_id: str, line_code: str, odpt_station_id: str) -> list:
+        line = LINES.get(line_code, {})
+        try:
+            trains = await self._get_trains_for_railway(line.get("odpt", ""))
+            line_results = []
+            for t in trains:
+                from_st = t.get("odpt:fromStation", "")
+                to_st = t.get("odpt:toStation", "")
+                dest_list = t.get("odpt:destinationStation", [])
+                dest = (dest_list[0] if dest_list else to_st) or ""
+                if odpt_station_id in (from_st, to_st):
+                    line_results.append({
+                        "line_code": line_code,
+                        "line_name": line.get("short", line_code),
+                        "color": line.get("color", "#ffffff"),
+                        "text_color": line.get("text", "#000000"),
+                        "shape": line.get("shape", "rect"),
+                        "train_number": t.get("odpt:trainNumber", ""),
+                        "destination": self._station_display_name(dest).upper(),
+                        "platform": "",
+                        "delay_min": (t.get("odpt:delay", 0) or 0) // 60,
+                        "eta_min": 1,
+                        "direction": t.get("odpt:railDirection", ""),
+                    })
+            return line_results or self._demo_line_trains(station_id, line_code)
+        except Exception:
+            return self._demo_line_trains(station_id, line_code)
+
     async def get_trains_at_station(self, station_id: str) -> list:
         """Return upcoming trains for a station. Falls back to demo data."""
         if not self.api_key:
@@ -142,34 +170,11 @@ class ODPTClient:
         station = STATIONS.get(station_id)
         if not station:
             return []
-        results = []
-        for line_code, odpt_station_id in station.get("odpt", {}).items():
-            line = LINES.get(line_code, {})
-            try:
-                trains = await self._get_trains_for_railway(line.get("odpt", ""))
-                line_results = []
-                for t in trains:
-                    from_st = t.get("odpt:fromStation", "")
-                    to_st = t.get("odpt:toStation", "")
-                    dest_list = t.get("odpt:destinationStation", [])
-                    dest = (dest_list[0] if dest_list else to_st) or ""
-                    if odpt_station_id in (from_st, to_st):
-                        line_results.append({
-                            "line_code": line_code,
-                            "line_name": line.get("short", line_code),
-                            "color": line.get("color", "#ffffff"),
-                            "text_color": line.get("text", "#000000"),
-                            "shape": line.get("shape", "rect"),
-                            "train_number": t.get("odpt:trainNumber", ""),
-                            "destination": self._station_display_name(dest).upper(),
-                            "platform": "",
-                            "delay_min": (t.get("odpt:delay", 0) or 0) // 60,
-                            "eta_min": 1,
-                            "direction": t.get("odpt:railDirection", ""),
-                        })
-                results.extend(line_results or self._demo_line_trains(station_id, line_code))
-            except Exception:
-                results.extend(self._demo_line_trains(station_id, line_code))
+        per_line = await asyncio.gather(*(
+            self._station_line_trains(station_id, line_code, odpt_station_id)
+            for line_code, odpt_station_id in station.get("odpt", {}).items()
+        ))
+        results = [t for line_results in per_line for t in line_results]
         results.sort(key=lambda x: x["eta_min"])
         return results[:16] if results else self._demo_station_trains(station_id)
 
