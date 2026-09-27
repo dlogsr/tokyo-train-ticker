@@ -18,12 +18,13 @@ from odpt_client import ODPTClient
 from line_data import LINES, STATIONS
 
 ODPT_KEY = os.getenv("ODPT_API_KEY")  # optional — demo mode if not set
+ODPT_CHALLENGE_KEY = os.getenv("ODPT_CHALLENGE_KEY")  # optional — Open Data Challenge tier (JR East, etc.)
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
 app = FastAPI(title="Tokyo Train Ticker")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-client = ODPTClient(api_key=ODPT_KEY)
+client = ODPTClient(api_key=ODPT_KEY, challenge_api_key=ODPT_CHALLENGE_KEY)
 
 # ── REST endpoints ────────────────────────────────────────────────────────────
 

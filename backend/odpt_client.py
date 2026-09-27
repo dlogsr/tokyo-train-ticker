@@ -13,6 +13,7 @@ import httpx
 from line_data import LINES, STATIONS
 
 ODPT_BASE = "https://api.odpt.org/api/v4"
+ODPT_CHALLENGE_BASE = "https://api-challenge.odpt.org/api/v4"
 JST = timezone(timedelta(hours=9))
 
 # Typical headways in minutes per line (peak / off-peak)
@@ -88,16 +89,18 @@ def _headway(line_code: str) -> int:
 
 
 class ODPTClient:
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, challenge_api_key: Optional[str] = None):
         self.api_key = api_key
+        self.challenge_api_key = challenge_api_key
         self._cache: dict = {}
         self._cache_time: dict = {}
         self._cache_ttl = 15  # seconds
 
-    async def _get(self, endpoint: str, params: dict) -> list:
-        if self.api_key:
-            params["acl:consumerKey"] = self.api_key
-        url = f"{ODPT_BASE}/{endpoint}"
+    async def _get(self, endpoint: str, params: dict, base: str = ODPT_BASE, key: Optional[str] = None) -> list:
+        key = key if key is not None else self.api_key
+        if key:
+            params = {**params, "acl:consumerKey": key}
+        url = f"{base}/{endpoint}"
         cache_key = url + str(sorted(params.items()))
         now = time.time()
         if cache_key in self._cache and now - self._cache_time.get(cache_key, 0) < self._cache_ttl:
@@ -109,6 +112,16 @@ class ODPTClient:
             self._cache[cache_key] = data
             self._cache_time[cache_key] = now
             return data
+
+    async def _get_trains_for_railway(self, railway: str) -> list:
+        """Try the Basic-license API, then the Challenge-license API (JR East etc.)."""
+        trains = await self._get("odpt:Train", {"odpt:railway": railway})
+        if not trains and self.challenge_api_key:
+            trains = await self._get(
+                "odpt:Train", {"odpt:railway": railway},
+                base=ODPT_CHALLENGE_BASE, key=self.challenge_api_key,
+            )
+        return trains
 
     def _strip_prefix(self, s: str) -> str:
         if ":" in s:
@@ -133,9 +146,7 @@ class ODPTClient:
         for line_code, odpt_station_id in station.get("odpt", {}).items():
             line = LINES.get(line_code, {})
             try:
-                trains = await self._get("odpt:Train", {
-                    "odpt:railway": line.get("odpt", ""),
-                })
+                trains = await self._get_trains_for_railway(line.get("odpt", ""))
                 for t in trains:
                     from_st = t.get("odpt:fromStation", "")
                     to_st = t.get("odpt:toStation", "")
@@ -168,7 +179,7 @@ class ODPTClient:
         if not line:
             return []
         try:
-            trains = await self._get("odpt:Train", {"odpt:railway": line["odpt"]})
+            trains = await self._get_trains_for_railway(line["odpt"])
             results = []
             for t in trains:
                 dest_list = t.get("odpt:destinationStation", [])
