@@ -117,6 +117,12 @@ const app = (() => {
   let allLines = [];
   let clockInterval = null;
 
+  // Data source: demo (simulated) vs live ODPT. Live needs a key on the backend.
+  let demoMode = true;
+  let liveAvailable = false;
+  let serverStatus = null;
+  const DEMO_PREF_KEY = 'tokyo-ticker-demo';
+
   // ── Button navigation state ───────────────────────────────────────────────
   let btnNavActive = false;
   let btnCursor = 0;
@@ -126,7 +132,7 @@ const app = (() => {
   async function init() {
     startClock();
     await Promise.all([loadLines(), loadStations()]);
-    checkStatus();
+    await checkStatus();
     connectWS();
     selectStation(currentStation);
     buildDevControls();
@@ -147,14 +153,41 @@ const app = (() => {
   async function checkStatus() {
     try {
       const res = await fetch(`${API}/api/status`);
-      const data = await res.json();
-      const badge = document.getElementById('demo-badge');
-      if (data.demo_mode) badge.classList.remove('hidden');
-      else badge.classList.add('hidden');
-      setDevStatus(data.demo_mode ? 'DEMO MODE (no ODPT key)' : `LIVE · ${data.lines} lines · ${data.stations} stations`);
+      serverStatus = await res.json();
+      liveAvailable = !!serverStatus.live_available;
+      let pref = null;
+      try { pref = localStorage.getItem(DEMO_PREF_KEY); } catch (_) {}
+      // Default to live when the backend has a key, unless the user chose demo.
+      demoMode = !liveAvailable || pref === 'demo';
+      updateDemoUI();
     } catch (e) {
       setDevStatus('Backend offline');
     }
+  }
+
+  function updateDemoUI() {
+    const badge = document.getElementById('demo-badge');
+    if (badge) {
+      badge.textContent = demoMode ? 'DEMO' : 'LIVE';
+      badge.classList.toggle('live', !demoMode);
+      badge.classList.toggle('disabled', !liveAvailable);
+      badge.title = liveAvailable
+        ? `Showing ${demoMode ? 'simulated' : 'live'} data — tap to switch`
+        : 'Live data unavailable: backend has no ODPT_API_KEY';
+    }
+    if (serverStatus) {
+      setDevStatus(demoMode
+        ? (liveAvailable ? 'DEMO MODE (live available)' : 'DEMO MODE (no ODPT key)')
+        : `LIVE · ${serverStatus.lines} lines · ${serverStatus.stations} stations`);
+    }
+  }
+
+  function toggleDemo() {
+    if (!liveAvailable) { updateDemoUI(); return; }
+    demoMode = !demoMode;
+    try { localStorage.setItem(DEMO_PREF_KEY, demoMode ? 'demo' : 'live'); } catch (_) {}
+    updateDemoUI();
+    refresh();
   }
 
   // ── WebSocket ─────────────────────────────────────────────────────────────────
@@ -186,16 +219,16 @@ const app = (() => {
   }
 
   function refresh() {
-    if (mode === 'station') wsSend({ mode: 'station', station_id: currentStation });
-    else wsSend({ mode: 'line', line_code: currentLine });
+    if (mode === 'station') wsSend({ mode: 'station', station_id: currentStation, demo: demoMode });
+    else wsSend({ mode: 'line', line_code: currentLine, demo: demoMode });
   }
 
   async function restRefresh() {
     if (mode === 'station') {
-      const trains = await fetch(`${API}/api/trains/station/${currentStation}`).then(r => r.json());
+      const trains = await fetch(`${API}/api/trains/station/${currentStation}?demo=${demoMode}`).then(r => r.json());
       renderStationBoard(currentStation, trains);
     } else {
-      const trains = await fetch(`${API}/api/trains/line/${currentLine}`).then(r => r.json());
+      const trains = await fetch(`${API}/api/trains/line/${currentLine}?demo=${demoMode}`).then(r => r.json());
       renderLineTracker(currentLine, trains);
     }
   }
@@ -751,7 +784,7 @@ const app = (() => {
     return `rgb(${r},${g},${b})`;
   }
 
-  return { init, setMode, selectStation, selectLine, selectPlatform, togglePltPopup, openStationPicker, openLinePicker, _pickStation, _pickLine, _selectLineTrain, simButton };
+  return { init, toggleDemo, setMode, selectStation, selectLine, selectPlatform, togglePltPopup, openStationPicker, openLinePicker, _pickStation, _pickLine, _selectLineTrain, simButton };
 })();
 
 document.addEventListener('DOMContentLoaded', () => {

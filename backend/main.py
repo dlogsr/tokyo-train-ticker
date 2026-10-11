@@ -32,6 +32,7 @@ client = ODPTClient(api_key=ODPT_KEY, challenge_api_key=ODPT_CHALLENGE_KEY)
 def status():
     return {
         "demo_mode": ODPT_KEY is None,
+        "live_available": ODPT_KEY is not None,
         "api_key_configured": ODPT_KEY is not None,
         "lines": len(LINES),
         "stations": len(STATIONS),
@@ -65,12 +66,12 @@ def list_stations():
     ]
 
 @app.get("/api/trains/station/{station_id}")
-async def trains_at_station(station_id: str):
-    return await client.get_trains_at_station(station_id)
+async def trains_at_station(station_id: str, demo: Optional[bool] = None):
+    return await client.get_trains_at_station(station_id, demo=demo)
 
 @app.get("/api/trains/line/{line_code}")
-async def trains_on_line(line_code: str):
-    return await client.get_trains_on_line(line_code)
+async def trains_on_line(line_code: str, demo: Optional[bool] = None):
+    return await client.get_trains_on_line(line_code, demo=demo)
 
 @app.get("/api/stations/{station_id}")
 def station_detail(station_id: str):
@@ -126,13 +127,14 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             msg = await websocket.receive_json()
             mode = msg.get("mode")
+            demo = msg.get("demo")  # True = simulated, False = live, absent = server default
             if mode == "station":
                 station_id = msg.get("station_id", "shibuya")
-                trains = await client.get_trains_at_station(station_id)
+                trains = await client.get_trains_at_station(station_id, demo=demo)
                 await websocket.send_json({"type": "station_update", "station_id": station_id, "trains": trains})
             elif mode == "line":
                 line_code = msg.get("line_code", "JY")
-                trains = await client.get_trains_on_line(line_code)
+                trains = await client.get_trains_on_line(line_code, demo=demo)
                 await websocket.send_json({"type": "line_update", "line_code": line_code, "trains": trains})
     except WebSocketDisconnect:
         manager.disconnect(websocket)
