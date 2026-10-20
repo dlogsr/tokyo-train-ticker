@@ -10,6 +10,8 @@ import android.content.Context
  */
 object Prefs {
     private const val FILE = "tokyo_train_ticker_prefs"
+    const val DEFAULT_BACKEND_URL = "https://tokyo-train-ticker-production.up.railway.app/"
+
     private const val KEY_BACKEND_URL = "backend_url"
     private const val KEY_STATION_PREFIX = "widget_station_"
     private const val KEY_STATION_NAME_PREFIX = "widget_station_name_"

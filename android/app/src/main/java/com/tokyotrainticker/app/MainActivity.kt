@@ -59,6 +59,7 @@ class MainActivity : AppCompatActivity() {
             backendUrlInput.setText(saved)
             showWebView(saved)
         } else {
+            backendUrlInput.setText(Prefs.DEFAULT_BACKEND_URL)
             showSettings()
         }
 

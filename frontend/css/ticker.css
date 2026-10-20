@@ -609,11 +609,14 @@ html, body {
   font-family: 'Press Start 2P', monospace;
   font-size: 9px;
   color: #443300;
+  background: transparent;
   border: 1px solid #332200;
   padding: 2px 4px;
   letter-spacing: 0.5px;
+  cursor: pointer;
 }
-.demo-badge.hidden { display: none; }
+.demo-badge.live { color: #33ff66; border-color: #116622; }
+.demo-badge.disabled { cursor: not-allowed; opacity: 0.6; }
 
 /* ── Screen + sim-button wrapper ─────────────────────────────────────────*/
 #screen-wrap {

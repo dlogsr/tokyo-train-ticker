@@ -49,7 +49,7 @@ class TrainWidgetConfigureActivity : AppCompatActivity() {
         val saveButton = findViewById<View>(R.id.saveButton)
 
         val existingUrl = Prefs.getBackendUrl(this)
-        if (existingUrl.isNotBlank()) backendUrlInput.setText(existingUrl)
+        backendUrlInput.setText(existingUrl.ifBlank { Prefs.DEFAULT_BACKEND_URL })
 
         loadStationsButton.setOnClickListener {
             val raw = backendUrlInput.text?.toString().orEmpty()

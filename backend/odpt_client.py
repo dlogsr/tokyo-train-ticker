@@ -135,7 +135,8 @@ class ODPTClient:
         parts = raw.split(".")
         return parts[-1] if parts else raw
 
-    async def _station_line_trains(self, station_id: str, line_code: str, odpt_station_id: str) -> list:
+    async def _station_line_trains(self, station_id: str, line_code: str, odpt_station_id: str,
+                                   fallback: bool = True) -> list:
         line = LINES.get(line_code, {})
         try:
             trains = await self._get_trains_for_railway(line.get("odpt", ""))
@@ -159,29 +160,40 @@ class ODPTClient:
                         "eta_min": 1,
                         "direction": t.get("odpt:railDirection", ""),
                     })
-            return line_results or self._demo_line_trains(station_id, line_code)
-        except Exception:
+            if line_results or not fallback:
+                return line_results
             return self._demo_line_trains(station_id, line_code)
+        except Exception:
+            return self._demo_line_trains(station_id, line_code) if fallback else []
 
-    async def get_trains_at_station(self, station_id: str) -> list:
-        """Return upcoming trains for a station. Falls back to demo data."""
-        if not self.api_key:
+    def _use_demo(self, demo: Optional[bool]) -> bool:
+        """demo=True forces simulated data; demo=False forces live data (no silent
+        demo fallback); None keeps the legacy behaviour (live if a key is set)."""
+        return bool(demo) or not self.api_key
+
+    async def get_trains_at_station(self, station_id: str, demo: Optional[bool] = None) -> list:
+        """Return upcoming trains for a station. Falls back to demo data unless demo=False."""
+        if self._use_demo(demo):
             return self._demo_station_trains(station_id)
+        fallback = demo is None
         station = STATIONS.get(station_id)
         if not station:
             return []
         per_line = await asyncio.gather(*(
-            self._station_line_trains(station_id, line_code, odpt_station_id)
+            self._station_line_trains(station_id, line_code, odpt_station_id, fallback)
             for line_code, odpt_station_id in station.get("odpt", {}).items()
         ))
         results = [t for line_results in per_line for t in line_results]
         results.sort(key=lambda x: x["eta_min"])
-        return results[:16] if results else self._demo_station_trains(station_id)
+        if results or not fallback:
+            return results[:16]
+        return self._demo_station_trains(station_id)
 
-    async def get_trains_on_line(self, line_code: str) -> list:
+    async def get_trains_on_line(self, line_code: str, demo: Optional[bool] = None) -> list:
         """Return all current trains on a line."""
-        if not self.api_key:
+        if self._use_demo(demo):
             return self._demo_line_all_trains(line_code)
+        fallback = demo is None
         line = LINES.get(line_code)
         if not line:
             return []
@@ -201,9 +213,11 @@ class ODPTClient:
                     "destination": self._station_display_name(dest).upper(),
                     "delay_min": (t.get("odpt:delay", 0) or 0) // 60,
                 })
-            return results or self._demo_line_all_trains(line_code)
-        except Exception:
+            if results or not fallback:
+                return results
             return self._demo_line_all_trains(line_code)
+        except Exception:
+            return self._demo_line_all_trains(line_code) if fallback else []
 
     # ── Demo/simulation mode ─────────────────────────────────────────────────
 
